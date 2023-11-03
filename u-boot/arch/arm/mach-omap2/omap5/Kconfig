@@ -40,9 +40,6 @@ choice
 	prompt "OMAP5 board select"
 	optional
 
-config TARGET_CL_SOM_AM57X
-	bool "CompuLab CL-SOM-AM57x"
-
 config TARGET_CM_T54
 	bool "CompuLab CM-T54"
 
@@ -51,13 +48,11 @@ config TARGET_OMAP5_UEVM
 
 config TARGET_DRA7XX_EVM
 	bool "TI DRA7XX"
-	select BOARD_LATE_INIT
 	select TI_I2C_BOARD_DETECT
 	select PHYS_64BIT
 
 config TARGET_AM57XX_EVM
 	bool "AM57XX"
-	select BOARD_LATE_INIT
 	select TI_I2C_BOARD_DETECT
 
 endchoice
@@ -184,7 +179,6 @@ endchoice
 endmenu
 endif
 
-source "board/compulab/cl-som-am57x/Kconfig"
 source "board/compulab/cm_t54/Kconfig"
 source "board/ti/omap5_uevm/Kconfig"
 source "board/ti/dra7xx/Kconfig"

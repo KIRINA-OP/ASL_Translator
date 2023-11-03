@@ -16,5 +16,6 @@
 
 /* Set TEXT at the beginning of the NOR flash */
 #define CONFIG_SYS_TEXT_BASE	0xA0000000
+#define CONFIG_BOARD_EARLY_INIT_F
 
 #endif				/* __CONFIG_H */

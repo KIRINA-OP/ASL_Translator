@@ -195,17 +195,3 @@
 &cpm_utmi1 {
 	status = "okay";
 };
-
-&ap_sdhci0 {
-	status = "okay";
-	bus-width = <4>;
-	no-1-8-v;
-	non-removable;
-};
-
-&cpm_sdhci0 {
-	status = "okay";
-	bus-width = <4>;
-	no-1-8-v;
-	non-removable;
-};

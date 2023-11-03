@@ -25,7 +25,7 @@ void gpio_early_init_uart(void)
 }
 #endif
 
-#ifdef CONFIG_MMC_SDHCI_TEGRA
+#ifdef CONFIG_TEGRA_MMC
 /*
  * Routine: pin_mux_mmc
  * Description: setup the pin muxes/tristate values for the SDMMC(s)

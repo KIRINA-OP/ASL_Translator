@@ -18,11 +18,17 @@
 /* Size of malloc() pool */
 #define CONFIG_SYS_MALLOC_LEN		(35 * SZ_1M)
 
+#define CONFIG_BOARD_EARLY_INIT_F
+#define CONFIG_BOARD_LATE_INIT
+
 /* MMC Config*/
 #define CONFIG_SYS_FSL_ESDHC_ADDR       USDHC3_BASE_ADDR
 #define CONFIG_SUPPORT_EMMC_BOOT
 #define CONFIG_SYS_FSL_ESDHC_HAS_DDR_MODE
 #define CONFIG_SYS_MMC_IMG_LOAD_PART	1
+
+#define CONFIG_PARTITION_UUIDS
+#define CONFIG_CMD_PART
 
 #define CONFIG_DFU_ENV_SETTINGS \
 	"dfu_alt_info=boot raw 0x2 0x400 mmcpart 1\0" \
@@ -32,7 +38,6 @@
 	"script=boot.scr\0" \
 	"image=zImage\0" \
 	"console=ttymxc0\0" \
-	"ethact=usb_ether\0" \
 	"fdt_high=0xffffffff\0" \
 	"initrd_high=0xffffffff\0" \
 	"fdt_file=imx7s-warp.dtb\0" \
@@ -112,7 +117,8 @@
 #define CONFIG_POWER_PFUZE3000
 #define CONFIG_POWER_PFUZE3000_I2C_ADDR	0x08
 
-/* environment organization */
+/* FLASH and environment organization */
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_ENV_SIZE			SZ_8K
 #define CONFIG_ENV_IS_IN_MMC
 
@@ -138,11 +144,5 @@
 /* USB Device Firmware Update support */
 #define CONFIG_SYS_DFU_DATA_BUF_SIZE	SZ_16M
 #define DFU_DEFAULT_POLL_TIMEOUT	300
-
-#define CONFIG_USB_ETHER
-#define CONFIG_USB_ETH_CDC
-#define CONFIG_USB_ETH_RNDIS
-#define CONFIG_USBNET_HOST_ADDR		"de:ad:be:af:00:00"
-#define CONFIG_USBNET_DEV_ADDR		"de:ad:be:af:00:01"
 
 #endif

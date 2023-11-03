@@ -3,9 +3,9 @@
 #
 
 VERSION = 2017
-PATCHLEVEL = 03
+PATCHLEVEL = 01
 SUBLEVEL =
-EXTRAVERSION = -rc3
+EXTRAVERSION = -rc2
 NAME =
 
 # *DOCUMENTATION*
@@ -482,13 +482,6 @@ else
 # Build targets only - this includes vmlinux, arch specific targets, clean
 # targets and others. In general all targets except *config targets.
 
-# Additional helpers built in scripts/
-# Carefully list dependencies so we do not try to build scripts twice
-# in parallel
-PHONY += scripts
-scripts: scripts_basic include/config/auto.conf
-	$(Q)$(MAKE) $(build)=$(@)
-
 ifeq ($(dot-config),1)
 # Read in config
 -include include/config/auto.conf
@@ -770,11 +763,7 @@ ALL-$(CONFIG_RAMBOOT_PBL) += u-boot.pbl
 endif
 endif
 ALL-$(CONFIG_SPL) += spl/u-boot-spl.bin
-ifeq ($(CONFIG_MX6)$(CONFIG_SECURE_BOOT), yy)
-ALL-$(CONFIG_SPL_FRAMEWORK) += u-boot-ivt.img
-else
 ALL-$(CONFIG_SPL_FRAMEWORK) += u-boot.img
-endif
 ALL-$(CONFIG_TPL) += tpl/u-boot-tpl.bin
 ALL-$(CONFIG_OF_SEPARATE) += u-boot.dtb
 ifeq ($(CONFIG_SPL_FRAMEWORK),y)
@@ -820,11 +809,9 @@ cmd_zobjcopy = $(OBJCOPY) $(OBJCOPYFLAGS) $(OBJCOPYFLAGS_$(@F)) $< $@
 quiet_cmd_efipayload = OBJCOPY $@
 cmd_efipayload = $(OBJCOPY) -I binary -O $(EFIPAYLOAD_BFDTARGET) -B $(EFIPAYLOAD_BFDARCH) $< $@
 
-MKIMAGEOUTPUT ?= /dev/null
-
 quiet_cmd_mkimage = MKIMAGE $@
 cmd_mkimage = $(objtree)/tools/mkimage $(MKIMAGEFLAGS_$(@F)) -d $< $@ \
-	$(if $(KBUILD_VERBOSE:1=), >$(MKIMAGEOUTPUT))
+	$(if $(KBUILD_VERBOSE:1=), >/dev/null)
 
 quiet_cmd_cat = CAT     $@
 cmd_cat = cat $(filter-out $(PHONY), $^) > $@
@@ -835,10 +822,6 @@ quiet_cmd_pad_cat = CAT     $@
 cmd_pad_cat = $(cmd_objcopy) && $(append) || rm -f $@
 
 cfg: u-boot.cfg
-
-quiet_cmd_cfgcheck = CFGCHK  $2
-cmd_cfgcheck = $(srctree)/scripts/check-config.sh $2 \
-		$(srctree)/scripts/config_whitelist.txt $(srctree)
 
 all:		$(ALL-y)
 ifeq ($(CONFIG_DM_I2C_COMPAT)$(CONFIG_SANDBOX),y)
@@ -851,7 +834,8 @@ endif
 	@# Check that this build does not use CONFIG options that we do not
 	@# know about unless they are in Kconfig. All the existing CONFIG
 	@# options are whitelisted, so new ones should not be added.
-	$(call cmd,cfgcheck,u-boot.cfg)
+	$(srctree)/scripts/check-config.sh u-boot.cfg \
+		$(srctree)/scripts/config_whitelist.txt ${srctree} 1>&2
 
 PHONY += dtbs
 dtbs: dts/dt.dtb
@@ -893,7 +877,7 @@ u-boot.hex u-boot.srec: u-boot FORCE
 	$(call if_changed,objcopy)
 
 OBJCOPYFLAGS_u-boot-nodtb.bin := -O binary \
-		$(if $(CONFIG_X86_16BIT_INIT),-R .start16 -R .resetvec)
+		$(if $(CONFIG_X86_RESET_VECTOR),-R .start16 -R .resetvec)
 
 binary_size_check: u-boot-nodtb.bin FORCE
 	@file_size=$(shell wc -c u-boot-nodtb.bin | awk '{print $$1}') ; \
@@ -954,11 +938,6 @@ else
 MKIMAGEFLAGS_u-boot.img = -A $(ARCH) -T firmware -C none -O u-boot \
 	-a $(CONFIG_SYS_TEXT_BASE) -e $(CONFIG_SYS_UBOOT_START) \
 	-n "U-Boot $(UBOOTRELEASE) for $(BOARD) board"
-MKIMAGEFLAGS_u-boot-ivt.img = -A $(ARCH) -T firmware_ivt -C none -O u-boot \
-	-a $(CONFIG_SYS_TEXT_BASE) -e $(CONFIG_SYS_UBOOT_START) \
-	-n "U-Boot $(UBOOTRELEASE) for $(BOARD) board"
-u-boot-ivt.img: MKIMAGEOUTPUT = u-boot-ivt.img.log
-CLEAN_FILES += u-boot-ivt.img.log u-boot-dtb.imx.log SPL.log u-boot.imx.log
 endif
 
 MKIMAGEFLAGS_u-boot-dtb.img = $(MKIMAGEFLAGS_u-boot.img)
@@ -967,13 +946,12 @@ MKIMAGEFLAGS_u-boot.kwb = -n $(srctree)/$(CONFIG_SYS_KWD_CONFIG:"%"=%) \
 	-T kwbimage -a $(CONFIG_SYS_TEXT_BASE) -e $(CONFIG_SYS_TEXT_BASE)
 
 MKIMAGEFLAGS_u-boot-spl.kwb = -n $(srctree)/$(CONFIG_SYS_KWD_CONFIG:"%"=%) \
-	-T kwbimage -a $(CONFIG_SYS_TEXT_BASE) -e $(CONFIG_SYS_TEXT_BASE) \
-	$(if $(KEYDIR),-k $(KEYDIR))
+	-T kwbimage -a $(CONFIG_SYS_TEXT_BASE) -e $(CONFIG_SYS_TEXT_BASE)
 
 MKIMAGEFLAGS_u-boot.pbl = -n $(srctree)/$(CONFIG_SYS_FSL_PBL_RCW:"%"=%) \
 		-R $(srctree)/$(CONFIG_SYS_FSL_PBL_PBI:"%"=%) -T pblimage
 
-u-boot-dtb.img u-boot.img u-boot.kwb u-boot.pbl u-boot-ivt.img: \
+u-boot-dtb.img u-boot.img u-boot.kwb u-boot.pbl: \
 		$(if $(CONFIG_SPL_LOAD_FIT),u-boot-nodtb.bin dts/dt.dtb,u-boot.bin) FORCE
 	$(call if_changed,mkimage)
 
@@ -1087,9 +1065,8 @@ quiet_cmd_ldr = LD      $@
 cmd_ldr = $(LD) $(LDFLAGS_$(@F)) \
 	       $(filter-out FORCE,$^) -o $@
 
-u-boot.rom: u-boot-x86-16bit.bin u-boot.bin \
-		$(if $(CONFIG_SPL_X86_16BIT_INIT),spl/u-boot-spl.bin) \
-		$(if $(CONFIG_HAVE_REFCODE),refcode.bin) FORCE
+u-boot.rom: u-boot-x86-16bit.bin u-boot.bin FORCE \
+		$(if $(CONFIG_HAVE_REFCODE),refcode.bin)
 	$(call if_changed,binman)
 
 OBJCOPYFLAGS_u-boot-x86-16bit.bin := -O binary -j .start16 -j .resetvec
@@ -1428,7 +1405,7 @@ CLEAN_DIRS  += $(MODVERDIR) \
 	       $(foreach d, spl tpl, $(patsubst %,$d/%, \
 			$(filter-out include, $(shell ls -1 $d 2>/dev/null))))
 
-CLEAN_FILES += include/bmp_logo.h include/bmp_logo_data.h \
+CLEAN_FILES += include/bmp_logo.h include/bmp_logo_data.h include/license.h \
 	       boot* u-boot* MLO* SPL System.map
 
 # Directories & files removed with 'make mrproper'
@@ -1548,6 +1525,11 @@ tests:
 %docs: scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts build_docproc
 	$(Q)$(MAKE) $(build)=doc/DocBook $@
+
+# Dummies...
+PHONY += prepare scripts
+prepare: ;
+scripts: ;
 
 endif #ifeq ($(config-targets),1)
 endif #ifeq ($(mixed-targets),1)

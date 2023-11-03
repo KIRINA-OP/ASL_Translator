@@ -448,7 +448,7 @@ static void mxcmci_set_clk_rate(struct mxcmci_host *host, unsigned int clk_ios)
 	writel((prescaler << 4) | divider, &host->base->clk_rate);
 }
 
-static int mxcmci_set_ios(struct mmc *mmc)
+static void mxcmci_set_ios(struct mmc *mmc)
 {
 	struct mxcmci_host *host = mmc->priv;
 	if (mmc->bus_width == 4)
@@ -464,8 +464,6 @@ static int mxcmci_set_ios(struct mmc *mmc)
 	}
 
 	host->clock = mmc->clock;
-
-	return 0;
 }
 
 static int mxcmci_init(struct mmc *mmc)

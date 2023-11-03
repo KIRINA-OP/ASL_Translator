@@ -9,4 +9,3 @@ obj-$(CONFIG_ALTERA_TIMER)	+= altera_timer.o
 obj-$(CONFIG_SANDBOX_TIMER)	+= sandbox_timer.o
 obj-$(CONFIG_X86_TSC_TIMER)	+= tsc_timer.o
 obj-$(CONFIG_OMAP_TIMER)	+= omap-timer.o
-obj-$(CONFIG_AST_TIMER)	+= ast_timer.o

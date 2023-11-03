@@ -10,6 +10,8 @@
 #define CONFIG_MX28				/* i.MX28 SoC */
 
 /* U-Boot Commands */
+#define CONFIG_SYS_NO_FLASH
+#define CONFIG_DOS_PARTITION
 
 #define CONFIG_CMD_NAND
 #define CONFIG_CMD_NAND_TRIMFFS

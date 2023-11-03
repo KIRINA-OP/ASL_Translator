@@ -16,7 +16,12 @@
 #include <linux/list.h>
 #include <linux/compiler.h>
 
-#define DMA_PIO_WORDS		15
+#ifndef	CONFIG_ARCH_DMA_PIO_WORDS
+#define	DMA_PIO_WORDS		15
+#else
+#define	DMA_PIO_WORDS		CONFIG_ARCH_DMA_PIO_WORDS
+#endif
+
 #define MXS_DMA_ALIGNMENT	ARCH_DMA_MINALIGN
 
 /*

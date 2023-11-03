@@ -18,6 +18,14 @@
 #include <generated/generic-asm-offsets.h>
 #include <generated/asm-offsets.h>
 
+/*
+ * Define this to boot U-Boot from a 32-bit program which sets the GDT
+ * differently. This can be used to boot directly from any stage of coreboot,
+ * for example, bypassing the normal payload-loading feature.
+ * This is only useful for development.
+ */
+#undef LOAD_FROM_32_BIT
+
 .section .text
 .code32
 .globl _start
@@ -68,7 +76,7 @@ _start:
 	/* Save table pointer */
 	movl	%ecx, %esi
 
-#ifdef CONFIG_X86_LOAD_FROM_32_BIT
+#ifdef LOAD_FROM_32_BIT
 	lgdt	gdt_ptr2
 #endif
 
@@ -225,7 +233,7 @@ multiboot_header:
 	/* entry addr */
 	.long	CONFIG_SYS_TEXT_BASE
 
-#ifdef CONFIG_X86_LOAD_FROM_32_BIT
+#ifdef LOAD_FROM_32_BIT
 	/*
 	 * The following Global Descriptor Table is just enough to get us into
 	 * 'Flat Protected Mode' - It will be discarded as soon as the final

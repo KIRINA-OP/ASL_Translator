@@ -10,4 +10,3 @@
 obj-y	:= soc.o clock.o
 obj-$(CONFIG_SPL_BUILD)	     += ddr.o
 obj-$(CONFIG_MP)             += mp.o
-obj-$(CONFIG_MX6UL_LITESOM)  += litesom.o

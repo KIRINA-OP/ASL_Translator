@@ -151,7 +151,7 @@ static ulong load_serial(long offset)
 		case SREC_DATA3:
 		case SREC_DATA4:
 		    store_addr = addr + offset;
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 		    if (addr2info(store_addr)) {
 			int rc;
 
@@ -971,7 +971,7 @@ static ulong load_serial_ymodem(ulong offset, int mode)
 			store_addr = addr + offset;
 			size += res;
 			addr += res;
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 			if (addr2info(store_addr)) {
 				int rc;
 

@@ -14,6 +14,7 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
+#define CONFIG_FSL_ELBC
 #define CONFIG_PCIE1	/* PCIE controller 1 (slot 1) */
 #define CONFIG_PCIE2	/* PCIE controller 2 (slot 2) */
 #define CONFIG_FSL_PCI_INIT	/* Use common FSL init code */
@@ -44,6 +45,7 @@
 #endif
 #define CONFIG_SYS_REDUNDAND_ENVIRONMENT
 
+#define CONFIG_MMC
 #define CONFIG_SYS_L2_SIZE	(256 << 10)
 
 #define CONFIG_LAST_STAGE_INIT
@@ -79,6 +81,7 @@
 #endif
 #define CONFIG_SYS_REDUNDAND_ENVIRONMENT
 
+#define CONFIG_MMC
 #define CONFIG_SYS_L2_SIZE	(256 << 10)
 
 #define CONFIG_LAST_STAGE_INIT
@@ -113,6 +116,11 @@
 #ifndef CONFIG_SYS_MONITOR_BASE
 #define CONFIG_SYS_MONITOR_BASE	CONFIG_SYS_TEXT_BASE	/* start of monitor */
 #endif
+
+/* High Level Configuration Options */
+#define CONFIG_BOOKE
+#define CONFIG_E500
+/* #define CONFIG_MPC85xx */
 
 #define CONFIG_MP
 
@@ -156,6 +164,8 @@
 #define CONFIG_L2_CACHE
 #define CONFIG_BTB
 
+#define CONFIG_BOARD_EARLY_INIT_F	/* Call board_pre_init */
+
 #define CONFIG_ENABLE_36BIT_PHYS
 
 #define CONFIG_SYS_MEMTEST_START	0x00200000	/* memtest works on */
@@ -173,6 +183,7 @@
 
 /* DDR Setup */
 #define CONFIG_DDR_ECC_ENABLE
+#define CONFIG_SYS_FSL_DDR3
 #ifndef CONFIG_DDR_ECC_ENABLE
 #define CONFIG_SYS_DDR_RAW_TIMING
 #define CONFIG_DDR_SPD
@@ -186,6 +197,7 @@
 #define CONFIG_SYS_DDR_SDRAM_BASE	0x00000000
 #define CONFIG_SYS_SDRAM_BASE		CONFIG_SYS_DDR_SDRAM_BASE
 
+#define CONFIG_NUM_DDR_CONTROLLERS	1
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 
 /* Default settings for DDR3 */
@@ -377,6 +389,7 @@
 #define CONFIG_CMD_PCI
 
 #define CONFIG_PCI_SCAN_SHOW	/* show pci devices on startup */
+#define CONFIG_DOS_PARTITION
 #endif /* CONFIG_PCI */
 
 /*
@@ -472,6 +485,11 @@
 #define CONFIG_SYS_FSL_ESDHC_ADDR	CONFIG_SYS_MPC85xx_ESDHC_ADDR
 #define CONFIG_MMC_SPI
 #define CONFIG_CMD_MMC_SPI
+#define CONFIG_GENERIC_MMC
+#endif
+
+#if defined(CONFIG_MMC) || defined(CONFIG_USB_EHCI) || defined(CONFIG_FSL_SATA)
+#define CONFIG_DOS_PARTITION
 #endif
 
 /* Misc Extra Settings */

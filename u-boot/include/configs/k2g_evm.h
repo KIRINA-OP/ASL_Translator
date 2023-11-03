@@ -60,6 +60,11 @@
 #define CONFIG_PHY_MICREL
 #define PHY_ANEG_TIMEOUT	10000 /* PHY needs longer aneg time */
 
+/* MMC/SD */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+#define CONFIG_OMAP_HSMMC
+
 #undef CONFIG_ENV_IS_IN_NAND
 #define CONFIG_ENV_IS_IN_FAT
 #define FAT_ENV_INTERFACE		"mmc"
@@ -73,7 +78,6 @@
 #define CONFIG_CADENCE_QSPI
 #define CONFIG_CQSPI_REF_CLK 384000000
 #define CONFIG_CQSPI_DECODER 0x0
-#define CONFIG_BOUNCE_BUFFER
 #endif
 
 #endif /* __CONFIG_K2G_EVM_H */

@@ -271,7 +271,6 @@ static void ddrphy_shift_rof_hws(void __iomem *phy_base, const int pos_shift[][2
 			rdqnsd = clamp(rdqnsd + ddrphy_hpstep(neg_shift[block][byte], dx, phy_base),
 				       0U, 0xffU);
 			lcdlr1 = (lcdlr1 & ~(0xffff << 8)) | (rdqsd << 8) | (rdqnsd << 16);
-			writel(lcdlr1, phy_base + PHY_DXLCDLR1(dx));
 			readl(phy_base + PHY_DXLCDLR1(dx)); /* relax */
 		}
 	}
@@ -471,7 +470,7 @@ int uniphier_ld11_umc_init(const struct uniphier_board_data *bd)
 
 	ddrphy_init(phy_base, freq);
 
-	for (ch = 0; ch < DRAM_CH_NR; ch++) {
+	for (ch = 0; ch < bd->dram_nr_ch; ch++) {
 		unsigned long size = bd->dram_ch[ch].size;
 		unsigned int width = bd->dram_ch[ch].width;
 

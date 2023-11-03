@@ -33,8 +33,6 @@
 #include <common.h>
 #include <asm/interrupt.h>
 
-#if !CONFIG_IS_ENABLED(X86_64)
-
 struct irq_action {
 	interrupt_handler_t *handler;
 	void *arg;
@@ -120,12 +118,10 @@ void do_irq(int hw_irq)
 		}
 	}
 }
-#endif
 
 #if defined(CONFIG_CMD_IRQ)
 int do_irqinfo(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
-#if !CONFIG_IS_ENABLED(X86_64)
 	int irq;
 
 	printf("Spurious IRQ: %u, last unknown IRQ: %d\n",
@@ -143,7 +139,6 @@ int do_irqinfo(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 					irq_handlers[irq].count);
 		}
 	}
-#endif
 
 	return 0;
 }

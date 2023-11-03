@@ -68,6 +68,9 @@
 #endif
 
 /* High Level Configuration Options */
+#define CONFIG_BOOKE			/* BOOKE */
+#define CONFIG_E500			/* BOOKE e500 family */
+#define CONFIG_FSL_IFC			/* Enable IFC Support */
 #define CONFIG_FSL_CAAM			/* Enable SEC/CAAM */
 #define CONFIG_SYS_HAS_SERDES		/* common SERDES init code */
 
@@ -96,6 +99,7 @@
 #define CONFIG_SYS_PCIE1_IO_PHYS	0xfffc00000ull
 
 #define CONFIG_PCI_SCAN_SHOW		/* show pci devices on startup */
+#define CONFIG_DOS_PARTITION
 #endif
 
 #define CONFIG_TSEC_ENET
@@ -124,6 +128,7 @@
 #define CONFIG_PANIC_HANG
 
 /* DDR Setup */
+#define CONFIG_SYS_FSL_DDR3
 #define CONFIG_DDR_SPD
 #define CONFIG_SYS_SPD_BUS_NUM		0
 #define SPD_EEPROM_ADDRESS		0x50
@@ -149,6 +154,10 @@
 #define CONFIG_SYS_PLATFORM_SRAM_BASE_PHYS \
 			(0xf00000000ull | CONFIG_SYS_PLATFORM_SRAM_BASE)
 #define CONFIG_SYS_PLATFORM_SRAM_SIZE	(512 << 10)
+
+#ifdef CONFIG_SPL_BUILD
+#define CONFIG_SYS_NO_FLASH
+#endif
 
 /*
  * IFC Definitions

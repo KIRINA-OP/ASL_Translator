@@ -24,6 +24,7 @@
 /*
  * Commands configuration
  */
+#define CONFIG_SYS_NO_FLASH		/* Declare no flash (NOR/SPI) */
 #define CONFIG_CMD_ENV
 #define CONFIG_CMD_PCI
 
@@ -42,9 +43,16 @@
 /*
  * SDIO/MMC Card Configuration
  */
+#define CONFIG_MMC
+#define CONFIG_MMC_SDMA
+#define CONFIG_GENERIC_MMC
+#define CONFIG_SDHCI
+#define CONFIG_MV_SDHCI
 #define CONFIG_SYS_MMC_BASE		MVEBU_SDIO_BASE
 
 /* Partition support */
+#define CONFIG_DOS_PARTITION
+#define CONFIG_EFI_PARTITION
 
 /* Additional FS support/configuration */
 #define CONFIG_SUPPORT_VFAT

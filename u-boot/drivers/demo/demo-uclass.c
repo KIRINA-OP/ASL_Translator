@@ -66,7 +66,7 @@ int demo_set_light(struct udevice *dev, int light)
 int demo_parse_dt(struct udevice *dev)
 {
 	struct dm_demo_pdata *pdata = dev_get_platdata(dev);
-	int dn = dev_of_offset(dev);
+	int dn = dev->of_offset;
 
 	pdata->sides = fdtdec_get_int(gd->fdt_blob, dn, "sides", 0);
 	pdata->colour = fdt_getprop(gd->fdt_blob, dn, "colour", NULL);

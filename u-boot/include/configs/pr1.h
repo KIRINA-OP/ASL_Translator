@@ -67,6 +67,11 @@
 #define CONFIG_TFTP_BLOCKSIZE	4404
 
 /*
+ * Flash Settings
+ */
+#define CONFIG_SYS_NO_FLASH	/* We have no parallel FLASH */
+
+/*
  * SPI Settings
  */
 #define CONFIG_BFIN_SPI

@@ -218,6 +218,10 @@
 # define CONFIG_SYS_I2C_SLAVE		0xFE
 #endif
 
+/*
+ * No Parallel Flash on this board
+ */
+#define CONFIG_SYS_NO_FLASH
 #undef CONFIG_CMD_JFFS2
 
 #endif

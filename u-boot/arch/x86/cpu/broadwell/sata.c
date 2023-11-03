@@ -235,7 +235,7 @@ static int broadwell_sata_ofdata_to_platdata(struct udevice *dev)
 {
 	struct sata_platdata *plat = dev_get_platdata(dev);
 	const void *blob = gd->fdt_blob;
-	int node = dev_of_offset(dev);
+	int node = dev->of_offset;
 
 	plat->port_map = fdtdec_get_int(blob, node, "intel,sata-port-map", 0);
 	plat->port0_gen3_tx = fdtdec_get_int(blob, node,

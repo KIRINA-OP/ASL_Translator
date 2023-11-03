@@ -32,7 +32,7 @@ int eth_getenv_enetaddr(const char *name, uchar *enetaddr)
 
 int eth_setenv_enetaddr(const char *name, const uchar *enetaddr)
 {
-	char buf[ARP_HLEN_ASCII + 1];
+	char buf[20];
 
 	sprintf(buf, "%pM", enetaddr);
 

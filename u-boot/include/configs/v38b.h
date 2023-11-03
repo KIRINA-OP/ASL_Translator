@@ -27,6 +27,7 @@
 #define CONFIG_NETCONSOLE		1
 
 #define CONFIG_BOARD_EARLY_INIT_R	1	/* do board-specific init */
+#define CONFIG_BOARD_EARLY_INIT_F	1	/* do board-specific init */
 #define CONFIG_MISC_INIT_R
 
 #define CONFIG_SYS_XLB_PIPELINING		1	/* gives better performance */
@@ -55,6 +56,12 @@
 /*
  * PCI - no support
  */
+
+/*
+ * Partitions
+ */
+#define CONFIG_MAC_PARTITION	1
+#define CONFIG_DOS_PARTITION	1
 
 /*
  * USB
@@ -284,6 +291,8 @@
 /*
  * Status LED
  */
+#define  CONFIG_STATUS_LED		/* Status LED enabled */
+#define  CONFIG_BOARD_SPECIFIC_LED	/* version has board specific leds */
 
 #define CONFIG_SYS_LED_BASE	MPC5XXX_GPT7_ENABLE	/* Timer 7 GPIO */
 #ifndef __ASSEMBLY__

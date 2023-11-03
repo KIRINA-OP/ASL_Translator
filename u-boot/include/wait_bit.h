@@ -11,7 +11,6 @@
 
 #include <common.h>
 #include <console.h>
-#include <watchdog.h>
 #include <linux/errno.h>
 #include <asm/io.h>
 
@@ -60,7 +59,6 @@ static inline int wait_for_bit(const char *prefix, const u32 *reg,
 		}
 
 		udelay(1);
-		WATCHDOG_RESET();
 	}
 
 	debug("%s: Timeout (reg=%p mask=%08x wait_set=%i)\n", prefix, reg, mask,

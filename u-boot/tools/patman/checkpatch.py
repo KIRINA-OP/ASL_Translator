@@ -138,7 +138,7 @@ def GetWarningMsg(col, msg_type, fname, line, msg):
         msg_type = col.Color(col.RED, msg_type)
     elif msg_type == 'check':
         msg_type = col.Color(col.MAGENTA, msg_type)
-    return '%s:%d: %s: %s\n' % (fname, line, msg_type, msg)
+    return '%s: %s,%d: %s' % (msg_type, fname, line, msg)
 
 def CheckPatches(verbose, args):
     '''Run the checkpatch.pl script on each patch'''
@@ -157,8 +157,7 @@ def CheckPatches(verbose, args):
                     result.checks):
                 print("Internal error: some problems lost")
             for item in result.problems:
-                sys.stderr.write(
-                    GetWarningMsg(col, item.get('type', '<unknown>'),
+                print(GetWarningMsg(col, item.get('type', '<unknown>'),
                         item.get('file', '<unknown>'),
                         item.get('line', 0), item.get('msg', 'message')))
             print

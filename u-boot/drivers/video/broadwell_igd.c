@@ -705,7 +705,7 @@ static int broadwell_igd_ofdata_to_platdata(struct udevice *dev)
 {
 	struct broadwell_igd_plat *plat = dev_get_platdata(dev);
 	struct broadwell_igd_priv *priv = dev_get_priv(dev);
-	int node = dev_of_offset(dev);
+	int node = dev->of_offset;
 	const void *blob = gd->fdt_blob;
 
 	if (fdtdec_get_int_array(blob, node, "intel,dp-hotplug",

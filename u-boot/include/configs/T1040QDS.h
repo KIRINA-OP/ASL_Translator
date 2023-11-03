@@ -26,6 +26,7 @@
 /*
  * T1040 QDS board configuration file
  */
+#define CONFIG_T1040QDS
 
 #ifdef CONFIG_RAMBOOT_PBL
 #define CONFIG_RAMBOOT_TEXT_BASE	CONFIG_SYS_TEXT_BASE
@@ -35,11 +36,17 @@
 #endif
 
 /* High Level Configuration Options */
+#define CONFIG_BOOKE
+#define CONFIG_E500			/* BOOKE e500 family */
+#define CONFIG_E500MC			/* BOOKE e500mc family */
 #define CONFIG_SYS_BOOK3E_HV		/* Category E.HV supported */
 #define CONFIG_MP			/* support multiple processors */
 
 /* support deep sleep */
 #define CONFIG_DEEP_SLEEP
+#if defined(CONFIG_DEEP_SLEEP)
+#define CONFIG_BOARD_EARLY_INIT_F
+#endif
 
 #ifndef CONFIG_SYS_TEXT_BASE
 #define CONFIG_SYS_TEXT_BASE	0xeff40000
@@ -50,7 +57,8 @@
 #endif
 
 #define CONFIG_SYS_FSL_CPC		/* Corenet Platform Cache */
-#define CONFIG_SYS_NUM_CPC		CONFIG_SYS_NUM_DDR_CTLRS
+#define CONFIG_SYS_NUM_CPC		CONFIG_NUM_DDR_CONTROLLERS
+#define CONFIG_FSL_IFC			/* Enable IFC Support */
 #define CONFIG_FSL_CAAM			/* Enable SEC/CAAM */
 #define CONFIG_PCI_INDIRECT_BRIDGE
 #define CONFIG_PCIE1			/* PCIE controller 1 */
@@ -63,7 +71,7 @@
 
 #define CONFIG_ENV_OVERWRITE
 
-#ifndef CONFIG_MTD_NOR_FLASH
+#ifdef CONFIG_SYS_NO_FLASH
 #define CONFIG_ENV_IS_NOWHERE
 #else
 #define CONFIG_FLASH_CFI_DRIVER
@@ -71,7 +79,7 @@
 #define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
 #endif
 
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 #if defined(CONFIG_SPIFLASH)
 #define CONFIG_SYS_EXTRA_ENV_RELOC
 #define CONFIG_ENV_IS_IN_SPI_FLASH
@@ -99,7 +107,7 @@
 #define CONFIG_ENV_SIZE		0x2000
 #define CONFIG_ENV_SECT_SIZE	0x20000 /* 128K (one sector) */
 #endif
-#else /* CONFIG_MTD_NOR_FLASH */
+#else /* CONFIG_SYS_NO_FLASH */
 #define CONFIG_ENV_SIZE                0x2000
 #define CONFIG_ENV_SECT_SIZE   0x20000 /* 128K (one sector) */
 #endif
@@ -159,10 +167,14 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_DDR_SDRAM_BASE	0x00000000
 #define CONFIG_SYS_SDRAM_BASE		CONFIG_SYS_DDR_SDRAM_BASE
 
+/* CONFIG_NUM_DDR_CONTROLLERS is defined in include/asm/config_mpc85xx.h */
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 
 #define CONFIG_DDR_SPD
+#ifndef CONFIG_SYS_FSL_DDR4
+#define CONFIG_SYS_FSL_DDR3
+#endif
 #define CONFIG_FSL_DDR_INTERACTIVE
 
 #define CONFIG_SYS_SPD_BUS_NUM	0
@@ -503,6 +515,7 @@ unsigned long get_board_ddr_clk(void);
 #endif
 
 #define CONFIG_PCI_SCAN_SHOW		/* show pci devices on startup */
+#define CONFIG_DOS_PARTITION
 #endif	/* CONFIG_PCI */
 
 /* SATA */
@@ -521,6 +534,7 @@ unsigned long get_board_ddr_clk(void);
 
 #define CONFIG_LBA48
 #define CONFIG_CMD_SATA
+#define CONFIG_DOS_PARTITION
 #endif
 
 /*
@@ -537,10 +551,14 @@ unsigned long get_board_ddr_clk(void);
 #endif
 #endif
 
+#define CONFIG_MMC
+
 #ifdef CONFIG_MMC
 #define CONFIG_FSL_ESDHC
 #define CONFIG_FSL_ESDHC_USE_PERIPHERAL_CLK
 #define CONFIG_SYS_FSL_ESDHC_ADDR       CONFIG_SYS_MPC85xx_ESDHC_ADDR
+#define CONFIG_GENERIC_MMC
+#define CONFIG_DOS_PARTITION
 #define CONFIG_FSL_ESDHC_ADAPTER_IDENT
 #endif
 
@@ -640,7 +658,7 @@ unsigned long get_board_ddr_clk(void);
 /*
  * Dynamic MTD Partition support with mtdparts
  */
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 #define CONFIG_MTD_DEVICE
 #define CONFIG_MTD_PARTITIONS
 #define CONFIG_CMD_MTDPARTS

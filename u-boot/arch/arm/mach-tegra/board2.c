@@ -125,7 +125,7 @@ int board_init(void)
 	pin_mux_spi();
 #endif
 
-#ifdef CONFIG_MMC_SDHCI_TEGRA
+#ifdef CONFIG_TEGRA_MMC
 	pin_mux_mmc();
 #endif
 

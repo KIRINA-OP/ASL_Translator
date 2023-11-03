@@ -116,7 +116,7 @@ static int rproc_pre_probe(struct udevice *dev)
 
 	if (!dev->platdata) {
 #if CONFIG_IS_ENABLED(OF_CONTROL)
-		int node = dev_of_offset(dev);
+		int node = dev->of_offset;
 		const void *blob = gd->fdt_blob;
 		bool tmp;
 		if (!blob) {

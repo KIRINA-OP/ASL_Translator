@@ -129,7 +129,7 @@ _start:
 	sh	r7, r0, r8
 	rsubi	r8, r10, 0x26
 	sh	r6, r0, r8
-#endif /* CONFIG_SPL_BUILD */
+#endif /* BUILD_SPL */
 
 	/* Flush cache before enable cache */
 	addik	r5, r0, 0

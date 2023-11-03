@@ -166,7 +166,6 @@ static const table_entry_t uimage_type[] = {
 	{	IH_TYPE_ZYNQMPIMAGE, "zynqmpimage", "Xilinx ZynqMP Boot Image" },
 	{	IH_TYPE_FPGA,       "fpga",       "FPGA Image" },
 	{       IH_TYPE_TEE,        "tee",        "Trusted Execution Environment Image",},
-	{	IH_TYPE_FIRMWARE_IVT, "firmware_ivt", "Firmware with HABv4 IVT" },
 	{	-1,		    "",		  "",			},
 };
 
@@ -366,11 +365,6 @@ void image_print_contents(const void *ptr)
 				printf("%s    Offset = 0x%08lx\n", p, data);
 			}
 		}
-	} else if (image_check_type(hdr, IH_TYPE_FIRMWARE_IVT)) {
-		printf("HAB Blocks:   0x%08x   0x0000   0x%08x\n",
-				image_get_load(hdr) - image_get_header_size(),
-				image_get_size(hdr) + image_get_header_size()
-						- 0x1FE0);
 	}
 }
 
@@ -561,7 +555,7 @@ void genimg_print_size(uint32_t size)
 	printf("%d Bytes = ", size);
 	print_size(size, "\n");
 #else
-	printf("%d Bytes = %.2f KiB = %.2f MiB\n",
+	printf("%d Bytes = %.2f kB = %.2f MB\n",
 			size, (double)size / 1.024e3,
 			(double)size / 1.048576e6);
 #endif
@@ -1576,7 +1570,10 @@ int image_setup_linux(bootm_headers_t *images)
 {
 	ulong of_size = images->ft_len;
 	char **of_flat_tree = &images->ft_addr;
+	ulong *initrd_start = &images->initrd_start;
+	ulong *initrd_end = &images->initrd_end;
 	struct lmb *lmb = &images->lmb;
+	ulong rd_len;
 	int ret;
 
 	if (IMAGE_ENABLE_OF_LIBFDT)
@@ -1589,6 +1586,13 @@ int image_setup_linux(bootm_headers_t *images)
 			puts("ERROR with allocation of cmdline\n");
 			return ret;
 		}
+	}
+	if (IMAGE_ENABLE_RAMDISK_HIGH) {
+		rd_len = images->rd_end - images->rd_start;
+		ret = boot_ramdisk_high(lmb, images->rd_start, rd_len,
+				initrd_start, initrd_end);
+		if (ret)
+			return ret;
 	}
 
 	if (IMAGE_ENABLE_OF_LIBFDT) {

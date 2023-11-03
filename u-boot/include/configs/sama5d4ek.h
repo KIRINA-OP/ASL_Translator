@@ -10,6 +10,9 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
+/* No NOR flash, this definition should put before common header */
+#define CONFIG_SYS_NO_FLASH
+
 #include "at91-sama5_common.h"
 
 /* serial console */
@@ -61,6 +64,8 @@
 /* MMC */
 
 #ifdef CONFIG_CMD_MMC
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
 #define CONFIG_GENERIC_ATMEL_MCI
 #define ATMEL_BASE_MMCI			ATMEL_BASE_MCI1
 #endif
@@ -77,6 +82,10 @@
 #define CONFIG_USB_ETHER
 #define CONFIG_USB_ETH_RNDIS
 #define CONFIG_USBNET_MANUFACTURER      "Atmel SAMA5D4EK"
+
+#if defined(CONFIG_CMD_USB) || defined(CONFIG_CMD_MMC)
+#define CONFIG_DOS_PARTITION
+#endif
 
 /* Ethernet Hardware */
 #define CONFIG_MACB

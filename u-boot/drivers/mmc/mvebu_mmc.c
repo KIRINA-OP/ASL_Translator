@@ -316,14 +316,12 @@ static void mvebu_mmc_set_bus(unsigned int bus)
 	mvebu_mmc_write(SDIO_HOST_CTRL, ctrl_reg);
 }
 
-static int mvebu_mmc_set_ios(struct mmc *mmc)
+static void mvebu_mmc_set_ios(struct mmc *mmc)
 {
 	debug("%s: bus[%d] clock[%d]\n", DRIVER_NAME,
 	      mmc->bus_width, mmc->clock);
 	mvebu_mmc_set_bus(mmc->bus_width);
 	mvebu_mmc_set_clk(mmc->clock);
-
-	return 0;
 }
 
 /*

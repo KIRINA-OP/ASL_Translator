@@ -28,15 +28,14 @@ static int do_sata(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		if (sata_curr_device != -1)
 			sata_stop();
 
-		return (sata_initialize() < 0) ?
-			CMD_RET_FAILURE : CMD_RET_SUCCESS;
+		return sata_initialize();
 	}
 
 	/* If the user has not yet run `sata init`, do it now */
 	if (sata_curr_device == -1) {
 		rc = sata_initialize();
 		if (rc == -1)
-			return CMD_RET_FAILURE;
+			return rc;
 		sata_curr_device = rc;
 	}
 

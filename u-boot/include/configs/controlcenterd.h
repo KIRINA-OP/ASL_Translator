@@ -35,9 +35,12 @@
 #endif
 
 /* High Level Configuration Options */
+#define CONFIG_BOOKE			/* BOOKE */
+#define CONFIG_E500			/* BOOKE e500 family */
 #define CONFIG_CONTROLCENTERD
 #define CONFIG_MP			/* support multiple processors */
 
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_ENABLE_36BIT_PHYS
 
 #ifdef CONFIG_PHYS_64BIT
@@ -121,6 +124,8 @@
 #define CONFIG_SYS_SDRAM_SIZE 1024
 #define CONFIG_VERY_BIG_RAM
 
+#define CONFIG_SYS_FSL_DDR3
+#define CONFIG_NUM_DDR_CONTROLLERS	1
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 
@@ -136,6 +141,7 @@
 /*
  * Local Bus Definitions
  */
+#define CONFIG_FSL_ELBC			/* Has Enhanced localbus controller */
 
 #define CONFIG_SYS_ELBC_BASE		0xe0000000
 #ifdef CONFIG_PHYS_64BIT
@@ -204,6 +210,9 @@
 /*
  * MMC
  */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+
 #define CONFIG_FSL_ESDHC
 #define CONFIG_SYS_FSL_ESDHC_ADDR	CONFIG_SYS_MPC85xx_ESDHC_ADDR
 
@@ -353,12 +362,14 @@
 /*
  * Board initialisation callbacks
  */
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOARD_EARLY_INIT_R
 #define CONFIG_MISC_INIT_R
 #define CONFIG_LAST_STAGE_INIT
 
 #else /* CONFIG_TRAILBLAZER */
 
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOARD_EARLY_INIT_R
 #define CONFIG_LAST_STAGE_INIT
 
@@ -370,6 +381,7 @@
 #define CONFIG_HW_WATCHDOG
 #define CONFIG_LOADS_ECHO
 #define CONFIG_SYS_LOADS_BAUD_CHANGE
+#define CONFIG_DOS_PARTITION
 
 /*
  * For booting Linux, the board info and command line data

@@ -839,9 +839,8 @@ static int pci_uclass_pre_probe(struct udevice *bus)
 	/* For bridges, use the top-level PCI controller */
 	if (!device_is_on_pci_bus(bus)) {
 		hose->ctlr = bus;
-		ret = decode_regions(hose, gd->fdt_blob,
-				     dev_of_offset(bus->parent),
-				     dev_of_offset(bus));
+		ret = decode_regions(hose, gd->fdt_blob, bus->parent->of_offset,
+				bus->of_offset);
 		if (ret) {
 			debug("%s: Cannot decode regions\n", __func__);
 			return ret;
@@ -904,7 +903,7 @@ static int pci_uclass_child_post_bind(struct udevice *dev)
 	struct fdt_pci_addr addr;
 	int ret;
 
-	if (dev_of_offset(dev) == -1)
+	if (dev->of_offset == -1)
 		return 0;
 
 	/*
@@ -912,7 +911,7 @@ static int pci_uclass_child_post_bind(struct udevice *dev)
 	 * just check the address.
 	 */
 	pplat = dev_get_parent_platdata(dev);
-	ret = fdtdec_get_pci_addr(gd->fdt_blob, dev_of_offset(dev),
+	ret = fdtdec_get_pci_addr(gd->fdt_blob, dev->of_offset,
 				  FDT_PCI_SPACE_CONFIG, "reg", &addr);
 
 	if (ret) {

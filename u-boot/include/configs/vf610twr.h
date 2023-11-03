@@ -30,6 +30,8 @@
 /* Size of malloc() pool */
 #define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + 2 * 1024 * 1024)
 
+#define CONFIG_BOARD_EARLY_INIT_F
+
 /* Allow to overwrite serial and ethaddr */
 #define CONFIG_ENV_OVERWRITE
 #define CONFIG_BAUDRATE			115200
@@ -62,9 +64,15 @@
 					"-(rootfs)"
 #endif
 
+#define CONFIG_MMC
 #define CONFIG_FSL_ESDHC
 #define CONFIG_SYS_FSL_ESDHC_ADDR	0
 #define CONFIG_SYS_FSL_ESDHC_NUM	1
+
+#define CONFIG_SYS_FSL_ERRATUM_ESDHC111
+
+#define CONFIG_GENERIC_MMC
+#define CONFIG_DOS_PARTITION
 
 #define CONFIG_FEC_MXC
 #define CONFIG_MII
@@ -231,6 +239,9 @@
 	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
 #define CONFIG_SYS_INIT_SP_ADDR \
 	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
+
+/* FLASH and environment organization */
+#define CONFIG_SYS_NO_FLASH
 
 #ifdef CONFIG_ENV_IS_IN_MMC
 #define CONFIG_ENV_SIZE			(8 * 1024)

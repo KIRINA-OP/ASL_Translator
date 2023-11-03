@@ -40,20 +40,14 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #if !CONFIG_IS_ENABLED(OF_CONTROL)
 static const struct ns16550_platdata am33xx_serial[] = {
-	{ .base = CONFIG_SYS_NS16550_COM1, .reg_shift = 2,
-	  .clock = CONFIG_SYS_NS16550_CLK, .fcr = UART_FCR_DEFVAL, },
+	{ .base = CONFIG_SYS_NS16550_COM1, .reg_shift = 2, .clock = CONFIG_SYS_NS16550_CLK },
 # ifdef CONFIG_SYS_NS16550_COM2
-	{ .base = CONFIG_SYS_NS16550_COM2, .reg_shift = 2,
-	  .clock = CONFIG_SYS_NS16550_CLK, .fcr = UART_FCR_DEFVAL, },
+	{ .base = CONFIG_SYS_NS16550_COM2, .reg_shift = 2, .clock = CONFIG_SYS_NS16550_CLK },
 #  ifdef CONFIG_SYS_NS16550_COM3
-	{ .base = CONFIG_SYS_NS16550_COM3, .reg_shift = 2,
-	  .clock = CONFIG_SYS_NS16550_CLK, .fcr = UART_FCR_DEFVAL, },
-	{ .base = CONFIG_SYS_NS16550_COM4, .reg_shift = 2,
-	  .clock = CONFIG_SYS_NS16550_CLK, .fcr = UART_FCR_DEFVAL, },
-	{ .base = CONFIG_SYS_NS16550_COM5, .reg_shift = 2,
-	  .clock = CONFIG_SYS_NS16550_CLK, .fcr = UART_FCR_DEFVAL, },
-	{ .base = CONFIG_SYS_NS16550_COM6, .reg_shift = 2,
-	  .clock = CONFIG_SYS_NS16550_CLK, .fcr = UART_FCR_DEFVAL, },
+	{ .base = CONFIG_SYS_NS16550_COM3, .reg_shift = 2, .clock = CONFIG_SYS_NS16550_CLK },
+	{ .base = CONFIG_SYS_NS16550_COM4, .reg_shift = 2, .clock = CONFIG_SYS_NS16550_CLK },
+	{ .base = CONFIG_SYS_NS16550_COM5, .reg_shift = 2, .clock = CONFIG_SYS_NS16550_CLK },
+	{ .base = CONFIG_SYS_NS16550_COM6, .reg_shift = 2, .clock = CONFIG_SYS_NS16550_CLK },
 #  endif
 # endif
 };
@@ -111,7 +105,7 @@ static const struct gpio_bank gpio_bank_am33xx[] = {
 const struct gpio_bank *const omap_gpio_bank = gpio_bank_am33xx;
 #endif
 
-#if defined(CONFIG_MMC_OMAP_HS) && !defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_OMAP_HSMMC) && !defined(CONFIG_SPL_BUILD)
 int cpu_mmc_init(bd_t *bis)
 {
 	int ret;
@@ -210,14 +204,6 @@ int arch_misc_init(void)
 	ret = uclass_first_device(UCLASS_MISC, &dev);
 	if (ret || !dev)
 		return ret;
-
-#if defined(CONFIG_DM_ETH) && defined(CONFIG_USB_ETHER)
-	ret = usb_ether_init();
-	if (ret) {
-		error("USB ether init failed\n");
-		return ret;
-	}
-#endif
 #endif
 	return 0;
 }

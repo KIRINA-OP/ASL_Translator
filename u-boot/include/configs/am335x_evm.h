@@ -26,7 +26,9 @@
 
 #define CONFIG_SYS_BOOTM_LEN		(16 << 20)
 
-#define CONFIG_MACH_TYPE		MACH_TYPE_AM335XEVM
+#define MACH_TYPE_TIAM335EVM		3589	/* Until the next sync */
+#define CONFIG_MACH_TYPE		MACH_TYPE_TIAM335EVM
+#define CONFIG_BOARD_LATE_INIT
 
 /* Clock Defines */
 #define V_OSCK				24000000  /* Clock output from T2 */
@@ -37,6 +39,10 @@
 
 /* Always 128 KiB env size */
 #define CONFIG_ENV_SIZE			(128 << 10)
+
+/* Enhance our eMMC support / experience. */
+#define CONFIG_CMD_GPT
+#define CONFIG_EFI_PARTITION
 
 #ifdef CONFIG_NAND
 #define NANDARGS \
@@ -255,6 +261,7 @@
  * and DFU.
  */
 #define CONFIG_USB_MUSB_DSPS
+#define CONFIG_ARCH_MISC_INIT
 #define CONFIG_USB_MUSB_PIO_ONLY
 #define CONFIG_USB_MUSB_DISABLE_BULK_COMBINE_SPLIT
 #define CONFIG_AM335X_USB0
@@ -274,9 +281,12 @@
 #endif
 
 #ifdef CONFIG_USB_MUSB_GADGET
+/* Removing USB gadget and can be enabled adter adding support usb DM */
+#ifndef CONFIG_DM_ETH
 #define CONFIG_USB_ETHER
 #define CONFIG_USB_ETH_RNDIS
 #define CONFIG_USBNET_HOST_ADDR	"de:ad:be:af:00:00"
+#endif /* CONFIG_DM_ETH */
 #endif /* CONFIG_USB_MUSB_GADGET */
 
 /*
@@ -295,6 +305,8 @@
 #undef CONFIG_ENV_IS_IN_NAND
 /* disable host part of MUSB in SPL */
 /* disable EFI partitions and partition UUID support */
+#undef CONFIG_PARTITION_UUIDS
+#undef CONFIG_EFI_PARTITION
 #endif
 
 /* USB Device Firmware Update support */
@@ -338,7 +350,6 @@
 #define CONFIG_ENV_OFFSET		0x0
 #define CONFIG_ENV_OFFSET_REDUND	(CONFIG_ENV_OFFSET + CONFIG_ENV_SIZE)
 #define CONFIG_SYS_REDUNDAND_ENVIRONMENT
-#define CONFIG_SYS_MMC_MAX_DEVICE	2
 #elif defined(CONFIG_NOR_BOOT)
 #define CONFIG_ENV_IS_IN_FLASH
 #define CONFIG_ENV_SECT_SIZE		(128 << 10)	/* 128 KiB */
@@ -385,6 +396,7 @@
  * 0x4C0000 - 0xFFFFFF : Userland (11 MiB + 256 KiB)
  */
 #if defined(CONFIG_NOR)
+#undef CONFIG_SYS_NO_FLASH
 #define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
 #define CONFIG_SYS_FLASH_PROTECTION
 #define CONFIG_SYS_FLASH_CFI

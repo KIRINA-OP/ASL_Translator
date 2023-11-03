@@ -14,6 +14,8 @@
 /*
  * High Level Configuration Options
  */
+#define CONFIG_BOOKE		1	/* BOOKE */
+#define CONFIG_E500		1	/* BOOKE e500 family */
 #define CONFIG_XPEDITE5200	1
 #define CONFIG_SYS_BOARD_NAME	"XPedite5200"
 #define CONFIG_SYS_FORM_PMC_XMC	1
@@ -32,11 +34,13 @@
 /*
  * DDR config
  */
+#define CONFIG_SYS_FSL_DDR2
 #undef CONFIG_FSL_DDR_INTERACTIVE
 #define CONFIG_SPD_EEPROM		/* Use SPD EEPROM for DDR setup */
 #define CONFIG_DDR_SPD
 #define CONFIG_MEM_INIT_VALUE		0xdeadbeef
 #define SPD_EEPROM_ADDRESS		0x54
+#define CONFIG_NUM_DDR_CONTROLLERS	1
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 #define CONFIG_CHIP_SELECTS_PER_CTRL	2
 #define CONFIG_DDR_ECC

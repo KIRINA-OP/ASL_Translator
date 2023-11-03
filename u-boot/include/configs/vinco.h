@@ -13,6 +13,9 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
+/* No NOR flash, this definition should be put before common header */
+#define CONFIG_SYS_NO_FLASH
+
 #include "at91-sama5_common.h"
 
 /* The value in the common file is too far away for the VInCo platform */
@@ -54,12 +57,17 @@
 
 #ifdef CONFIG_CMD_MMC
 #define CONFIG_SUPPORT_EMMC_BOOT
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
 #define CONFIG_GENERIC_ATMEL_MCI
 #define ATMEL_BASE_MMCI			ATMEL_BASE_MCI1
 #define CONFIG_SYS_MMC_CLK_OD		500000
 
 /* For generating MMC partitions */
+#define CONFIG_PARTITION_UUIDS
 #define CONFIG_RANDOM_UUID
+#define CONFIG_EFI_PARTITION
+#define CONFIG_CMD_GPT
 
 #endif
 
@@ -75,6 +83,10 @@
 #define CONFIG_USB_ETHER
 #define CONFIG_USB_ETH_RNDIS
 #define CONFIG_USBNET_MANUFACTURER      "L+G VInCo"
+
+#if defined(CONFIG_CMD_USB) || defined(CONFIG_CMD_MMC)
+#define CONFIG_DOS_PARTITION
+#endif
 
 /* Ethernet Hardware */
 #define CONFIG_PHY_SMSC

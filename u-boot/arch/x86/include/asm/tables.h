@@ -65,6 +65,6 @@ void write_tables(void);
  * @start:	start address to write PIRQ routing table
  * @return:	end address of PIRQ routing table
  */
-ulong write_pirq_routing_table(ulong start);
+u32 write_pirq_routing_table(u32 start);
 
 #endif /* _X86_TABLES_H_ */

@@ -1751,9 +1751,7 @@ int mmc_init(struct mmc *mmc)
 
 	if (!err)
 		err = mmc_complete_init(mmc);
-	if (err)
-		printf("%s: %d, time %lu\n", __func__, err, get_timer(start));
-
+	debug("%s: %d, time %lu\n", __func__, err, get_timer(start));
 	return err;
 }
 

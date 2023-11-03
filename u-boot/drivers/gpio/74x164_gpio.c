@@ -130,7 +130,7 @@ static int gen_74x164_probe(struct udevice *dev)
 	char *str, name[32];
 	int ret;
 	const void *fdt = gd->fdt_blob;
-	int node = dev_of_offset(dev);
+	int node = dev->of_offset;
 
 	snprintf(name, sizeof(name), "%s_", dev->name);
 	str = strdup(name);

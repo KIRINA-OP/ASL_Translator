@@ -1861,16 +1861,14 @@ static void *video_logo(void)
 	__maybe_unused int y_off = 0;
 	__maybe_unused ulong addr;
 	__maybe_unused char *s;
-	__maybe_unused int len, ret, space;
+	__maybe_unused int len, space;
 
 	splash_get_pos(&video_logo_xpos, &video_logo_ypos);
 
 #ifdef CONFIG_SPLASH_SCREEN
 	s = getenv("splashimage");
 	if (s != NULL) {
-		ret = splash_screen_prepare();
-		if (ret < 0)
-			return video_fb_address;
+		splash_screen_prepare();
 		addr = simple_strtoul(s, NULL, 16);
 
 		if (video_display_bitmap(addr,
@@ -1968,7 +1966,7 @@ static void *video_logo(void)
 static int cfb_fb_is_in_dram(void)
 {
 	bd_t *bd = gd->bd;
-#if defined(CONFIG_ARM) || defined(CONFIG_AVR32) || defined(CONFIG_NDS32) || \
+#if defined(CONFIG_ARM) || defined(CONFIG_AVR32) || defined(COFNIG_NDS32) || \
 defined(CONFIG_SANDBOX) || defined(CONFIG_X86)
 	ulong start, end;
 	int i;

@@ -26,6 +26,10 @@
  * message that includes some other pre-processor symbols in the text.
  */
 
+/* We need the part command */
+#define CONFIG_PARTITION_UUIDS
+#define CONFIG_CMD_PART
+
 #define BOOTENV_SHARED_BLKDEV_BODY(devtypel) \
 		"if " #devtypel " dev ${devnum}; then " \
 			"setenv devtype " #devtypel "; " \

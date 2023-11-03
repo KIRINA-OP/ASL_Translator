@@ -768,8 +768,7 @@ static int setup_reloc(void)
 }
 
 /* ARM calls relocate_code from its crt0.S */
-#if !defined(CONFIG_ARM) && !defined(CONFIG_SANDBOX) && \
-		!CONFIG_IS_ENABLED(X86_64)
+#if !defined(CONFIG_ARM) && !defined(CONFIG_SANDBOX)
 
 static int jump_to_copy(void)
 {
@@ -846,7 +845,7 @@ __weak int arch_cpu_init_dm(void)
 	return 0;
 }
 
-static const init_fnc_t init_sequence_f[] = {
+static init_fnc_t init_sequence_f[] = {
 #ifdef CONFIG_SANDBOX
 	setup_ram_buf,
 #endif
@@ -859,6 +858,10 @@ static const init_fnc_t init_sequence_f[] = {
 #endif
 	initf_malloc,
 	initf_console_record,
+#if defined(CONFIG_MPC85xx) || defined(CONFIG_MPC86xx)
+	/* TODO: can this go into arch_cpu_init()? */
+	probecpu,
+#endif
 #if defined(CONFIG_X86) && defined(CONFIG_HAVE_FSP)
 	x86_fsp_init,
 #endif
@@ -884,6 +887,11 @@ static const init_fnc_t init_sequence_f[] = {
 		defined(CONFIG_BLACKFIN) || defined(CONFIG_NDS32) || \
 		defined(CONFIG_SH) || defined(CONFIG_SPARC)
 	timer_init,		/* initialize timer */
+#endif
+#ifdef CONFIG_SYS_ALLOC_DPRAM
+#if !defined(CONFIG_CPM2)
+	dpram_init,
+#endif
 #endif
 #if defined(CONFIG_BOARD_POSTCLK_INIT)
 	board_postclk_init,
@@ -917,9 +925,10 @@ static const init_fnc_t init_sequence_f[] = {
 #if defined(CONFIG_PPC) || defined(CONFIG_M68K) || defined(CONFIG_SH)
 	checkcpu,
 #endif
-#if defined(CONFIG_DISPLAY_CPUINFO)
 	print_cpuinfo,		/* display cpu info (and speed) */
-#endif
+#if defined(CONFIG_MPC5xxx)
+	prt_mpc5xxx_clks,
+#endif /* CONFIG_MPC5xxx */
 #if defined(CONFIG_DISPLAY_BOARDINFO)
 	show_board_info,
 #endif
@@ -1033,14 +1042,13 @@ static const init_fnc_t init_sequence_f[] = {
 	setup_reloc,
 #if defined(CONFIG_X86) || defined(CONFIG_ARC)
 	copy_uboot_to_ram,
-	do_elf_reloc_fixups,
 	clear_bss,
+	do_elf_reloc_fixups,
 #endif
 #if defined(CONFIG_XTENSA)
 	clear_bss,
 #endif
-#if !defined(CONFIG_ARM) && !defined(CONFIG_SANDBOX) && \
-		!CONFIG_IS_ENABLED(X86_64)
+#if !defined(CONFIG_ARM) && !defined(CONFIG_SANDBOX)
 	jump_to_copy,
 #endif
 	NULL,
@@ -1074,7 +1082,7 @@ void board_init_f(ulong boot_flags)
 		hang();
 
 #if !defined(CONFIG_ARM) && !defined(CONFIG_SANDBOX) && \
-		!defined(CONFIG_EFI_APP) && !CONFIG_IS_ENABLED(X86_64)
+		!defined(CONFIG_EFI_APP)
 	/* NOTREACHED - jump_to_copy() does not return */
 	hang();
 #endif
@@ -1098,10 +1106,8 @@ void board_init_f(ulong boot_flags)
  * NOTE: At present only x86 uses this route, but it is intended that
  * all archs will move to this when generic relocation is implemented.
  */
-static const init_fnc_t init_sequence_f_r[] = {
-#if !CONFIG_IS_ENABLED(X86_64)
+static init_fnc_t init_sequence_f_r[] = {
 	init_cache_f_r,
-#endif
 
 	NULL,
 };

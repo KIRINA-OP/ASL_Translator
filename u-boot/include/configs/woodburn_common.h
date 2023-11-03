@@ -20,6 +20,11 @@
 
 #define CONFIG_SYS_DCACHE_OFF
 
+/* Only in case the value is not present in mach-types.h */
+#ifndef MACH_TYPE_FLEA3
+#define MACH_TYPE_FLEA3                3668
+#endif
+
 #define CONFIG_MACH_TYPE		MACH_TYPE_FLEA3
 
 /* This is required to setup the ESDC controller */
@@ -55,6 +60,8 @@
 #define CONFIG_RTC_MC13XXX
 
 /* mmc driver */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
 #define CONFIG_FSL_ESDHC
 #define CONFIG_SYS_FSL_ESDHC_ADDR	0
 #define CONFIG_SYS_FSL_ESDHC_NUM	1
@@ -79,6 +86,9 @@
 #define CONFIG_BOOTP_DNS
 
 #define CONFIG_CMD_NAND
+
+#define CONFIG_DOS_PARTITION
+#define CONFIG_EFI_PARTITION
 
 #define CONFIG_MXC_GPIO
 

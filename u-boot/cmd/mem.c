@@ -372,8 +372,10 @@ static int do_mem_cmp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 static int do_mem_cp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
-	ulong	addr, dest, count;
+	ulong	addr, dest, count, bytes;
 	int	size;
+	const void *src;
+	void *buf;
 
 	if (argc != 4)
 		return CMD_RET_USAGE;
@@ -396,7 +398,7 @@ static int do_mem_cp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		return 1;
 	}
 
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 	/* check if we are copying to Flash */
 	if ( (addr2info(dest) != NULL)
 #ifdef CONFIG_HAS_DATAFLASH
@@ -436,7 +438,7 @@ static int do_mem_cp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	/* Check if we are copying from DataFlash to RAM */
 	if (addr_dataflash(addr) && !addr_dataflash(dest)
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 				 && (addr2info(dest) == NULL)
 #endif
 	   ){
@@ -463,7 +465,29 @@ static int do_mem_cp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	}
 #endif
 
-	memcpy((void *)dest, (void *)addr, count * size);
+	bytes = size * count;
+	buf = map_sysmem(dest, bytes);
+	src = map_sysmem(addr, bytes);
+	while (count-- > 0) {
+		if (size == 4)
+			*((u32 *)buf) = *((u32  *)src);
+#ifdef CONFIG_SYS_SUPPORT_64BIT_DATA
+		else if (size == 8)
+			*((u64 *)buf) = *((u64 *)src);
+#endif
+		else if (size == 2)
+			*((u16 *)buf) = *((u16 *)src);
+		else
+			*((u8 *)buf) = *((u8 *)src);
+		src += size;
+		buf += size;
+
+		/* reset watchdog from time to time */
+		if ((count % (64 << 10)) == 0)
+			WATCHDOG_RESET();
+	}
+	unmap_sysmem(buf);
+	unmap_sysmem(src);
 
 	return 0;
 }

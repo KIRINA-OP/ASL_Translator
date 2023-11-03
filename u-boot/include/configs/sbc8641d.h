@@ -57,6 +57,7 @@
 #undef CONFIG_DDR_ECC			/* only for ECC DDR module */
 #define CONFIG_ECC_INIT_VIA_DDRCONTROLLER	/* DDR controller or DMA? */
 #define CONFIG_MEM_INIT_VALUE		0xDeadBeef
+#define CONFIG_NUM_DDR_CONTROLLERS     2
 #define CACHE_LINE_INTERLEAVING		0x20000000
 #define PAGE_INTERLEAVING		0x21000000
 #define BANK_INTERLEAVING		0x22000000
@@ -74,6 +75,8 @@
 #ifndef CONFIG_SYS_CLK_FREQ
 #define CONFIG_SYS_CLK_FREQ     get_board_sys_clk(0)
 #endif
+
+#define CONFIG_BOARD_EARLY_INIT_F	1	/* Call board_pre_init */
 
 #undef	CONFIG_SYS_DRAM_TEST				/* memory test, takes time */
 #define CONFIG_SYS_MEMTEST_START	0x00200000	/* memtest region */
@@ -100,6 +103,7 @@
 #define CONFIG_SYS_MAX_DDR_BAT_SIZE	0x80000000	/* BAT mapping size */
 #define CONFIG_VERY_BIG_RAM
 
+#define CONFIG_NUM_DDR_CONTROLLERS	2
 #define CONFIG_DIMM_SLOTS_PER_CTLR	2
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 
@@ -300,6 +304,7 @@
 
 #define CONFIG_PCI_SCAN_SHOW		/* show pci devices on startup */
 
+#define CONFIG_DOS_PARTITION
 #undef CONFIG_SCSI_AHCI
 
 #ifdef CONFIG_SCSI_AHCI

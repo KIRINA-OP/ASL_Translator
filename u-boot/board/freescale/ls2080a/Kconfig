@@ -12,8 +12,6 @@ config SYS_SOC
 config SYS_CONFIG_NAME
 	default "ls2080a_emu"
 
-source "board/freescale/common/Kconfig"
-
 endif
 
 if TARGET_LS2080A_SIMU
@@ -29,7 +27,5 @@ config SYS_SOC
 
 config SYS_CONFIG_NAME
 	default "ls2080a_simu"
-
-source "board/freescale/common/Kconfig"
 
 endif

@@ -224,10 +224,6 @@
 /* ULPI SMSC USB3320 */
 &usb1 {
 	status = "okay";
-};
-
-&dwc3_1 {
-	status = "okay";
 	dr_mode = "host";
 };
 

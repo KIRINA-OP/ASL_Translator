@@ -99,6 +99,12 @@ struct lmb;
 
 #endif /* IMAGE_ENABLE_FIT */
 
+#ifdef CONFIG_SYS_BOOT_RAMDISK_HIGH
+# define IMAGE_ENABLE_RAMDISK_HIGH	1
+#else
+# define IMAGE_ENABLE_RAMDISK_HIGH	0
+#endif
+
 #ifdef CONFIG_SYS_BOOT_GET_CMDLINE
 # define IMAGE_BOOT_GET_CMDLINE		1
 #else
@@ -274,7 +280,6 @@ enum {
 	IH_TYPE_FPGA,			/* FPGA Image */
 	IH_TYPE_VYBRIDIMAGE,	/* VYBRID .vyb Image */
 	IH_TYPE_TEE,            /* Trusted Execution Environment OS Image */
-	IH_TYPE_FIRMWARE_IVT,		/* Firmware Image with HABv4 IVT */
 
 	IH_TYPE_COUNT,			/* Number of image types */
 };
@@ -866,8 +871,6 @@ int bootz_setup(ulong image, ulong *start, ulong *end);
 
 /* image node */
 #define FIT_DATA_PROP		"data"
-#define FIT_DATA_OFFSET_PROP	"data-offset"
-#define FIT_DATA_SIZE_PROP	"data-size"
 #define FIT_TIMESTAMP_PROP	"timestamp"
 #define FIT_DESC_PROP		"description"
 #define FIT_ARCH_PROP		"arch"
@@ -946,8 +949,6 @@ int fit_image_get_load(const void *fit, int noffset, ulong *load);
 int fit_image_get_entry(const void *fit, int noffset, ulong *entry);
 int fit_image_get_data(const void *fit, int noffset,
 				const void **data, size_t *size);
-int fit_image_get_data_offset(const void *fit, int noffset, int *data_offset);
-int fit_image_get_data_size(const void *fit, int noffset, int *data_size);
 
 int fit_image_hash_get_algo(const void *fit, int noffset, char **algo);
 int fit_image_hash_get_value(const void *fit, int noffset, uint8_t **value,
@@ -963,7 +964,6 @@ int fit_set_timestamp(void *fit, int noffset, time_t timestamp);
  * @fit:	Pointer to the FIT format image header
  * @comment:	Comment to add to signature nodes
  * @require_keys: Mark all keys as 'required'
- * @engine_id:	Engine to use for signing
  *
  * Adds hash values for all component images in the FIT blob.
  * Hashes are calculated for all component images which have hash subnodes
@@ -976,8 +976,7 @@ int fit_set_timestamp(void *fit, int noffset, time_t timestamp);
  *     libfdt error code, on failure
  */
 int fit_add_verification_data(const char *keydir, void *keydest, void *fit,
-			      const char *comment, int require_keys,
-			      const char *engine_id);
+			      const char *comment, int require_keys);
 
 int fit_image_verify(const void *fit, int noffset);
 int fit_config_verify(const void *fit, int conf_noffset);
@@ -1057,7 +1056,6 @@ struct image_sign_info {
 	const void *fdt_blob;		/* FDT containing public keys */
 	int required_keynode;		/* Node offset of key to use: -1=any */
 	const char *require_keys;	/* Value for 'required' property */
-	const char *engine_id;		/* Engine to use for signing */
 };
 #endif /* Allow struct image_region to always be defined for rsa.h */
 

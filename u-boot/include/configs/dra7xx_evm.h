@@ -15,6 +15,7 @@
 #include <environment/ti/dfu.h>
 
 #define CONFIG_DRA7XX
+#define CONFIG_BOARD_EARLY_INIT_F
 
 #ifdef CONFIG_SPL_BUILD
 #define CONFIG_IODELAY_RECALIBRATION
@@ -100,6 +101,8 @@
 #include <configs/ti_omap5_common.h>
 
 /* Enhance our eMMC support / experience. */
+#define CONFIG_CMD_GPT
+#define CONFIG_EFI_PARTITION
 #define CONFIG_RANDOM_UUID
 #define CONFIG_HSMMC2_8BIT
 
@@ -166,6 +169,7 @@
 #define CONFIG_OMAP_USB2PHY2_HOST
 
 /* SATA */
+#define CONFIG_BOARD_LATE_INIT
 #define CONFIG_SCSI
 #define CONFIG_LIBATA
 #define CONFIG_SCSI_AHCI
@@ -232,6 +236,7 @@
 #define CONFIG_SYS_FLASH_CFI_WIDTH	FLASH_CFI_16BIT
 #define CONFIG_SYS_FLASH_SIZE		(64 * 1024 * 1024) /* 64 MB */
 /* #define CONFIG_INIT_IGNORE_ERROR */
+#undef CONFIG_SYS_NO_FLASH
 #define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
 #define CONFIG_SYS_FLASH_PROTECTION
 #define CONFIG_SYS_FLASH_CFI

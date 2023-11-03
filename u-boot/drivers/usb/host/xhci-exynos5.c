@@ -68,7 +68,7 @@ static int xhci_usb_ofdata_to_platdata(struct udevice *dev)
 	}
 
 	depth = 0;
-	node = fdtdec_next_compatible_subnode(blob, dev_of_offset(dev),
+	node = fdtdec_next_compatible_subnode(blob, dev->of_offset,
 				COMPAT_SAMSUNG_EXYNOS5_USB3_PHY, &depth);
 	if (node <= 0) {
 		debug("XHCI: Can't get device node for usb3-phy controller\n");

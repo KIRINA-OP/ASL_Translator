@@ -570,8 +570,14 @@ static int fec_init (struct eth_device *dev, bd_t * bd)
 	rxIdx = 0;
 	txIdx = 0;
 
-	if (!rtx)
-		rtx = (RTXBD *)(immr->im_cpm.cp_dpmem + CPM_FEC_BASE);
+	if (!rtx) {
+#ifdef CONFIG_SYS_ALLOC_DPRAM
+		rtx = (RTXBD *) (immr->im_cpm.cp_dpmem +
+				 dpram_alloc_align (sizeof (RTXBD), 8));
+#else
+		rtx = (RTXBD *) (immr->im_cpm.cp_dpmem + CPM_FEC_BASE);
+#endif
+	}
 	/*
 	 * Setup Receiver Buffer Descriptors (13.14.24.18)
 	 * Settings:

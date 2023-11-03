@@ -85,6 +85,7 @@
 #define CONFIG_FLASH_CFI_MTD
 #else
 #define CONFIG_ENV_IS_NOWHERE
+#define CONFIG_SYS_NO_FLASH
 #endif
 
 #define CONFIG_BAUDRATE			115200

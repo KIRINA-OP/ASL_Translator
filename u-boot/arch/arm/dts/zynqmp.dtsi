@@ -22,7 +22,6 @@
 			device_type = "cpu";
 			enable-method = "psci";
 			reg = <0x0>;
-			cpu-idle-states = <&CPU_SLEEP_0>;
 		};
 
 		cpu@1 {
@@ -30,7 +29,6 @@
 			device_type = "cpu";
 			enable-method = "psci";
 			reg = <0x1>;
-			cpu-idle-states = <&CPU_SLEEP_0>;
 		};
 
 		cpu@2 {
@@ -38,7 +36,6 @@
 			device_type = "cpu";
 			enable-method = "psci";
 			reg = <0x2>;
-			cpu-idle-states = <&CPU_SLEEP_0>;
 		};
 
 		cpu@3 {
@@ -46,20 +43,6 @@
 			device_type = "cpu";
 			enable-method = "psci";
 			reg = <0x3>;
-			cpu-idle-states = <&CPU_SLEEP_0>;
-		};
-
-		idle-states {
-			entry-mehod = "arm,psci";
-
-			CPU_SLEEP_0: cpu-sleep-0 {
-				compatible = "arm,idle-state";
-				arm,psci-suspend-param = <0x40000000>;
-				local-timer-stop;
-				entry-latency-us = <300>;
-				exit-latency-us = <600>;
-				min-residency-us = <800000>;
-			};
 		};
 	};
 
@@ -637,7 +620,7 @@
 		};
 
 		i2c0: i2c@ff020000 {
-			compatible = "cdns,i2c-r1p14", "cdns,i2c-r1p10";
+			compatible = "cdns,i2c-r1p10";
 			status = "disabled";
 			interrupt-parent = <&gic>;
 			interrupts = <0 17 4>;
@@ -648,7 +631,7 @@
 		};
 
 		i2c1: i2c@ff030000 {
-			compatible = "cdns,i2c-r1p14", "cdns,i2c-r1p10";
+			compatible = "cdns,i2c-r1p10";
 			status = "disabled";
 			interrupt-parent = <&gic>;
 			interrupts = <0 18 4>;

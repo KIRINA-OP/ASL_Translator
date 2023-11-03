@@ -16,6 +16,7 @@
 /*
  * Machine number definition
  */
+#define MACH_TYPE_DNS325		3800
 #define CONFIG_MACH_TYPE		MACH_TYPE_DNS325
 
 /*
@@ -28,6 +29,7 @@
 /*
  * Commands configuration
  */
+#define CONFIG_SYS_NO_FLASH		/* Declare no flash (NOR/SPI) */
 #define CONFIG_CMD_ENV
 #define CONFIG_CMD_NAND
 #define CONFIG_CMD_IDE

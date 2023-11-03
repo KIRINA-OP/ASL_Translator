@@ -142,19 +142,19 @@ int meson_pinctrl_probe(struct udevice *dev)
 	int node, gpio = -1, len;
 	int na, ns;
 
-	na = fdt_address_cells(gd->fdt_blob, dev_of_offset(dev->parent));
+	na = fdt_address_cells(gd->fdt_blob, dev->parent->of_offset);
 	if (na < 1) {
 		debug("bad #address-cells\n");
 		return -EINVAL;
 	}
 
-	ns = fdt_size_cells(gd->fdt_blob, dev_of_offset(dev->parent));
+	ns = fdt_size_cells(gd->fdt_blob, dev->parent->of_offset);
 	if (ns < 1) {
 		debug("bad #size-cells\n");
 		return -EINVAL;
 	}
 
-	fdt_for_each_subnode(node, gd->fdt_blob, dev_of_offset(dev)) {
+	fdt_for_each_subnode(node, gd->fdt_blob, dev->of_offset) {
 		if (fdt_getprop(gd->fdt_blob, node, "gpio-controller", &len)) {
 			gpio = node;
 			break;

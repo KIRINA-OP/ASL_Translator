@@ -13,7 +13,7 @@
 #include <asm/arch/clock.h>
 #include <asm/arch/gpio.h>
 #include <asm/imx-common/sys_proto.h>
-#ifdef CONFIG_MMC_MXC
+#ifdef CONFIG_MXC_MMC
 #include <asm/arch/mxcmmc.h>
 #endif
 
@@ -196,7 +196,7 @@ int cpu_eth_init(bd_t *bis)
  */
 int cpu_mmc_init(bd_t *bis)
 {
-#ifdef CONFIG_MMC_MXC
+#ifdef CONFIG_MXC_MMC
 	return mxc_mmc_init(bis);
 #else
 	return 0;
@@ -340,7 +340,7 @@ void imx_get_mac_from_fuse(int dev_id, unsigned char *mac)
 }
 #endif /* CONFIG_FEC_MXC */
 
-#ifdef CONFIG_MMC_MXC
+#ifdef CONFIG_MXC_MMC
 void mx27_sd1_init_pins(void)
 {
 	int i;
@@ -374,7 +374,7 @@ void mx27_sd2_init_pins(void)
 		imx_gpio_mode(mode[i]);
 
 }
-#endif /* CONFIG_MMC_MXC */
+#endif /* CONFIG_MXC_MMC */
 
 #ifndef CONFIG_SYS_DCACHE_OFF
 void enable_caches(void)

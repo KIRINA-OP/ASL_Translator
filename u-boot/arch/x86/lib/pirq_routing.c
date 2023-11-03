@@ -11,8 +11,9 @@
 #include <asm/pci.h>
 #include <asm/pirq_routing.h>
 
-static u8 pirq_get_next_free_irq(struct udevice *dev, u8 *pirq, u16 bitmap,
-				 bool irq_already_routed[])
+static bool irq_already_routed[16];
+
+static u8 pirq_get_next_free_irq(struct udevice *dev, u8 *pirq, u16 bitmap)
 {
 	int i, link;
 	u8 irq = 0;
@@ -54,11 +55,9 @@ void pirq_route_irqs(struct udevice *dev, struct irq_info *irq, int num)
 {
 	unsigned char irq_slot[MAX_INTX_ENTRIES];
 	unsigned char pirq[CONFIG_MAX_PIRQ_LINKS];
-	bool irq_already_routed[16];
 	int i, intx;
 
 	memset(pirq, 0, CONFIG_MAX_PIRQ_LINKS);
-	memset(irq_already_routed, '\0', sizeof(irq_already_routed));
 
 	/* Set PCI IRQs */
 	for (i = 0; i < num; i++) {
@@ -84,8 +83,7 @@ void pirq_route_irqs(struct udevice *dev, struct irq_info *irq, int num)
 
 			/* yet not routed */
 			if (!pirq[link]) {
-				irq = pirq_get_next_free_irq(dev, pirq, bitmap,
-						irq_already_routed);
+				irq = pirq_get_next_free_irq(dev, pirq, bitmap);
 				pirq[link] = irq;
 			} else {
 				irq = pirq[link];
@@ -116,14 +114,14 @@ u32 copy_pirq_routing_table(u32 addr, struct irq_routing_table *rt)
 	addr = ALIGN(addr, 16);
 
 	debug("Copying Interrupt Routing Table to 0x%x\n", addr);
-	memcpy((void *)(uintptr_t)addr, rt, rt->size);
+	memcpy((void *)addr, rt, rt->size);
 
 	/*
 	 * We do the sanity check here against the copied table after memcpy,
 	 * as something might go wrong after the memcpy, which is normally
 	 * due to the F segment decode is not turned on to systeam RAM.
 	 */
-	rom_rt = (struct irq_routing_table *)(uintptr_t)addr;
+	rom_rt = (struct irq_routing_table *)addr;
 	if (rom_rt->signature != PIRQ_SIGNATURE ||
 	    rom_rt->version != PIRQ_VERSION || rom_rt->size % 16) {
 		printf("Interrupt Routing Table not valid\n");

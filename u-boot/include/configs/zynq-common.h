@@ -43,6 +43,7 @@
 # define CONFIG_PHY_MARVELL
 # define CONFIG_PHY_REALTEK
 # define CONFIG_PHY_XILINX
+# define CONFIG_BOOTP_SERVERIP
 # define CONFIG_BOOTP_BOOTPATH
 # define CONFIG_BOOTP_GATEWAY
 # define CONFIG_BOOTP_HOSTNAME
@@ -60,7 +61,7 @@
 #endif
 
 /* NOR */
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 # define CONFIG_SYS_FLASH_BASE		0xE2000000
 # define CONFIG_SYS_FLASH_SIZE		(16 * 1024 * 1024)
 # define CONFIG_SYS_MAX_FLASH_BANKS	1
@@ -83,7 +84,10 @@
 #endif
 
 /* MMC */
-#if defined(CONFIG_MMC_SDHCI_ZYNQ)
+#if defined(CONFIG_ZYNQ_SDHCI)
+# define CONFIG_MMC
+# define CONFIG_GENERIC_MMC
+# define CONFIG_SDHCI
 # define CONFIG_ZYNQ_SDHCI_MAX_FREQ	52000000
 #endif
 
@@ -105,7 +109,7 @@
 	"dfu_ram=run dfu_ram_info && dfu 0 ram 0\0" \
 	"thor_ram=run dfu_ram_info && thordown 0 ram 0\0"
 
-# if defined(CONFIG_MMC_SDHCI_ZYNQ)
+# if defined(CONFIG_ZYNQ_SDHCI)
 #  define DFU_ALT_INFO_MMC \
 	"dfu_mmc_info=" \
 	"set dfu_alt_info " \
@@ -128,9 +132,10 @@
 # define DFU_ALT_INFO
 #endif
 
-#if defined(CONFIG_MMC_SDHCI_ZYNQ) || defined(CONFIG_ZYNQ_USB)
+#if defined(CONFIG_ZYNQ_SDHCI) || defined(CONFIG_ZYNQ_USB)
 # define CONFIG_SUPPORT_VFAT
 # define CONFIG_FAT_WRITE
+# define CONFIG_DOS_PARTITION
 #endif
 
 #if defined(CONFIG_ZYNQ_I2C0) || defined(CONFIG_ZYNQ_I2C1)
@@ -162,13 +167,13 @@
 
 /* Environment */
 #ifndef CONFIG_ENV_IS_NOWHERE
-# ifdef CONFIG_MTD_NOR_FLASH
+# ifndef CONFIG_SYS_NO_FLASH
 /* Environment in NOR flash */
 #  define CONFIG_ENV_IS_IN_FLASH
 # elif defined(CONFIG_ZYNQ_QSPI)
 /* Environment in Serial Flash */
 #  define CONFIG_ENV_IS_IN_SPI_FLASH
-# elif !defined(CONFIG_MTD_NOR_FLASH)
+# elif defined(CONFIG_SYS_NO_FLASH)
 #  define CONFIG_ENV_IS_NOWHERE
 # endif
 
@@ -235,6 +240,7 @@
 
 #define CONFIG_CMDLINE_EDITING
 #define CONFIG_AUTO_COMPLETE
+#define CONFIG_BOARD_LATE_INIT
 #define CONFIG_SYS_LONGHELP
 #define CONFIG_CLOCKS
 #define CONFIG_CMD_CLK
@@ -242,6 +248,9 @@
 #define CONFIG_SYS_CBSIZE		256 /* Console I/O Buffer Size */
 #define CONFIG_SYS_PBSIZE		(CONFIG_SYS_CBSIZE + \
 					sizeof(CONFIG_SYS_PROMPT) + 16)
+
+/* Physical Memory map */
+#define CONFIG_SYS_TEXT_BASE		0x4000000
 
 #ifndef CONFIG_NR_DRAM_BANKS
 # define CONFIG_NR_DRAM_BANKS		1
@@ -287,11 +296,12 @@
 #define CONFIG_CMD_SPL
 #define CONFIG_SPL_FRAMEWORK
 #define CONFIG_SPL_BOARD_INIT
+#define CONFIG_SPL_RAM_DEVICE
 
 #define CONFIG_SPL_LDSCRIPT	"arch/arm/mach-zynq/u-boot-spl.lds"
 
 /* MMC support */
-#ifdef CONFIG_MMC_SDHCI_ZYNQ
+#ifdef CONFIG_ZYNQ_SDHCI
 #define CONFIG_SYS_MMCSD_FS_BOOT_PARTITION     1
 #define CONFIG_SPL_FS_LOAD_PAYLOAD_NAME     "u-boot.img"
 #endif

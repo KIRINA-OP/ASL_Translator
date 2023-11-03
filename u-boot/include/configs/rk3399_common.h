@@ -9,6 +9,7 @@
 
 #include "rockchip-common.h"
 
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_NR_DRAM_BANKS		1
 #define CONFIG_ENV_SIZE			0x2000
 #define CONFIG_SYS_MAXARGS		16
@@ -26,6 +27,10 @@
 #define CONFIG_SYS_BOOTM_LEN	(64 << 20)	/* 64M */
 
 /* MMC/SD IP block */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+#define CONFIG_DWMMC
+#define CONFIG_SDHCI
 #define CONFIG_BOUNCE_BUFFER
 #define CONFIG_ROCKCHIP_SDHCI_MAX_FREQ	200000000
 
@@ -33,6 +38,7 @@
 #define CONFIG_FS_FAT
 #define CONFIG_FAT_WRITE
 #define CONFIG_FS_EXT4
+#define CONFIG_CMD_PART
 
 /* RAW SD card / eMMC locations. */
 #define CONFIG_SYS_SPI_U_BOOT_OFFS	(128 << 10)

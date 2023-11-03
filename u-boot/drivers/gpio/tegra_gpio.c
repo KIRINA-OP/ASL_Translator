@@ -337,8 +337,7 @@ static int gpio_tegra_bind(struct udevice *parent)
 	 * This driver does not make use of interrupts, other than to figure
 	 * out the number of GPIO banks
 	 */
-	if (!fdt_getprop(gd->fdt_blob, dev_of_offset(parent), "interrupts",
-			 &len))
+	if (!fdt_getprop(gd->fdt_blob, parent->of_offset, "interrupts", &len))
 		return -EINVAL;
 	bank_count = len / 3 / sizeof(u32);
 	ctlr = (struct gpio_ctlr *)dev_get_addr(parent);
@@ -364,7 +363,7 @@ static int gpio_tegra_bind(struct udevice *parent)
 					  plat->port_name, plat, -1, &dev);
 			if (ret)
 				return ret;
-			dev_set_of_offset(dev, dev_of_offset(parent));
+			dev->of_offset = parent->of_offset;
 		}
 	}
 

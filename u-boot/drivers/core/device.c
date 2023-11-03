@@ -355,7 +355,7 @@ int device_probe(struct udevice *dev)
 			goto fail;
 	}
 
-	if (drv->ofdata_to_platdata && dev_of_offset(dev) >= 0) {
+	if (drv->ofdata_to_platdata && dev->of_offset >= 0) {
 		ret = drv->ofdata_to_platdata(dev);
 		if (ret)
 			goto fail;
@@ -524,7 +524,7 @@ int device_find_child_by_of_offset(struct udevice *parent, int of_offset,
 	*devp = NULL;
 
 	list_for_each_entry(dev, &parent->child_head, sibling_node) {
-		if (dev_of_offset(dev) == of_offset) {
+		if (dev->of_offset == of_offset) {
 			*devp = dev;
 			return 0;
 		}
@@ -549,7 +549,7 @@ static struct udevice *_device_find_global_by_of_offset(struct udevice *parent,
 {
 	struct udevice *dev, *found;
 
-	if (dev_of_offset(parent) == of_offset)
+	if (parent->of_offset == of_offset)
 		return parent;
 
 	list_for_each_entry(dev, &parent->child_head, sibling_node) {
@@ -637,21 +637,19 @@ fdt_addr_t dev_get_addr_index(struct udevice *dev, int index)
 		int len = 0;
 		int na, ns;
 
-		na = fdt_address_cells(gd->fdt_blob,
-				       dev_of_offset(dev->parent));
+		na = fdt_address_cells(gd->fdt_blob, dev->parent->of_offset);
 		if (na < 1) {
 			debug("bad #address-cells\n");
 			return FDT_ADDR_T_NONE;
 		}
 
-		ns = fdt_size_cells(gd->fdt_blob, dev_of_offset(dev->parent));
+		ns = fdt_size_cells(gd->fdt_blob, dev->parent->of_offset);
 		if (ns < 0) {
 			debug("bad #size-cells\n");
 			return FDT_ADDR_T_NONE;
 		}
 
-		reg = fdt_getprop(gd->fdt_blob, dev_of_offset(dev), "reg",
-				  &len);
+		reg = fdt_getprop(gd->fdt_blob, dev->of_offset, "reg", &len);
 		if (!reg || (len <= (index * sizeof(fdt32_t) * (na + ns)))) {
 			debug("Req index out of range\n");
 			return FDT_ADDR_T_NONE;
@@ -664,15 +662,16 @@ fdt_addr_t dev_get_addr_index(struct udevice *dev, int index)
 		 * bus setups.
 		 */
 		addr = fdt_translate_address((void *)gd->fdt_blob,
-					     dev_of_offset(dev), reg);
+					     dev->of_offset, reg);
 	} else {
 		/*
 		 * Use the "simple" translate function for less complex
 		 * bus setups.
 		 */
 		addr = fdtdec_get_addr_size_auto_parent(gd->fdt_blob,
-				dev_of_offset(dev->parent), dev_of_offset(dev),
-				"reg", index, NULL, false);
+							dev->parent->of_offset,
+							dev->of_offset, "reg",
+							index, NULL, false);
 		if (CONFIG_IS_ENABLED(SIMPLE_BUS) && addr != FDT_ADDR_T_NONE) {
 			if (device_get_uclass_id(dev->parent) ==
 			    UCLASS_SIMPLE_BUS)
@@ -703,7 +702,7 @@ fdt_addr_t dev_get_addr_size_index(struct udevice *dev, int index,
 	 * next call to the exisiting dev_get_xxx function which handles
 	 * all config options.
 	 */
-	fdtdec_get_addr_size_auto_noparent(gd->fdt_blob, dev_of_offset(dev),
+	fdtdec_get_addr_size_auto_noparent(gd->fdt_blob, dev->of_offset,
 					   "reg", index, size, false);
 
 	/*
@@ -721,7 +720,7 @@ fdt_addr_t dev_get_addr_name(struct udevice *dev, const char *name)
 #if CONFIG_IS_ENABLED(OF_CONTROL)
 	int index;
 
-	index = fdt_stringlist_search(gd->fdt_blob, dev_of_offset(dev),
+	index = fdt_stringlist_search(gd->fdt_blob, dev->of_offset,
 				      "reg-names", name);
 	if (index < 0)
 		return index;
@@ -800,7 +799,7 @@ bool of_device_is_compatible(struct udevice *dev, const char *compat)
 {
 	const void *fdt = gd->fdt_blob;
 
-	return !fdt_node_check_compatible(fdt, dev_of_offset(dev), compat);
+	return !fdt_node_check_compatible(fdt, dev->of_offset, compat);
 }
 
 bool of_machine_is_compatible(const char *compat)

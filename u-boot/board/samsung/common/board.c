@@ -251,7 +251,7 @@ int board_eth_init(bd_t *bis)
 #ifdef CONFIG_GENERIC_MMC
 static int init_mmc(void)
 {
-#ifdef CONFIG_MMC_SDHCI
+#ifdef CONFIG_SDHCI
 	return exynos_mmc_init(gd->fdt_blob);
 #else
 	return 0;
@@ -260,7 +260,7 @@ static int init_mmc(void)
 
 static int init_dwmmc(void)
 {
-#ifdef CONFIG_MMC_DW
+#ifdef CONFIG_DWMMC
 	return exynos_dwmmc_init(gd->fdt_blob);
 #else
 	return 0;

@@ -320,7 +320,7 @@ static int omap_gpio_bind(struct udevice *dev)
 		return -ENOMEM;
 
 	plat->base = base_addr;
-	plat->port_name = fdt_get_name(gd->fdt_blob, dev_of_offset(dev), NULL);
+	plat->port_name = fdt_get_name(gd->fdt_blob, dev->of_offset, NULL);
 	dev->platdata = plat;
 
 	return 0;

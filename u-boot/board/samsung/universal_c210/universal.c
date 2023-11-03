@@ -27,21 +27,33 @@
 DECLARE_GLOBAL_DATA_PTR;
 
 unsigned int board_rev;
-static int init_pmic_lcd(void);
 
 u32 get_board_rev(void)
 {
 	return board_rev;
 }
 
-int exynos_power_init(void)
-{
-	return init_pmic_lcd();
-}
-
 static int get_hwrev(void)
 {
 	return board_rev & 0xFF;
+}
+
+int exynos_power_init(void)
+{
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
+	int ret;
+
+	/*
+	 * For PMIC the I2C bus is named as I2C5, but it is connected
+	 * to logical I2C adapter 0
+	 */
+	ret = pmic_init(I2C_0);
+	if (ret)
+		return ret;
+
+	init_pmic_lcd();
+#endif
+	return 0;
 }
 
 static unsigned short get_adc_value(int channel)
@@ -71,29 +83,23 @@ static unsigned short get_adc_value(int channel)
 
 static int adc_power_control(int on)
 {
-	struct udevice *dev;
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
 	int ret;
-	u8 reg;
+	struct pmic *p = pmic_get("MAX8998_PMIC");
+	if (!p)
+		return -ENODEV;
 
-	ret = pmic_get("max8998-pmic", &dev);
-	if (ret) {
-		puts("Failed to get MAX8998!\n");
-		return ret;
-	}
+	if (pmic_probe(p))
+		return -1;
 
-	reg = pmic_reg_read(dev, MAX8998_REG_ONOFF1);
-	if (on)
-		reg |= MAX8998_LDO4;
-	else
-		reg &= ~MAX8998_LDO4;
+	ret = pmic_set_output(p,
+			      MAX8998_REG_ONOFF1,
+			      MAX8998_LDO4, !!on);
 
-	ret = pmic_reg_write(dev, MAX8998_REG_ONOFF1, reg);
-	if (ret) {
-		puts("MAX8998 LDO setting error\n");
-		return -EINVAL;
-	}
-
+	return ret;
+#else
 	return 0;
+#endif
 }
 
 static unsigned int get_hw_revision(void)
@@ -141,50 +147,39 @@ static void check_hw_revision(void)
 #ifdef CONFIG_USB_GADGET
 static int s5pc210_phy_control(int on)
 {
-	struct udevice *dev;
-	int ret;
-	u8 reg;
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
+	int ret = 0;
+	struct pmic *p = pmic_get("MAX8998_PMIC");
+	if (!p)
+		return -ENODEV;
 
-	ret = pmic_get("max8998-pmic", &dev);
-	if (ret) {
-		puts("Failed to get MAX8998!\n");
-		return ret;
-	}
+	if (pmic_probe(p))
+		return -1;
 
 	if (on) {
-		reg = pmic_reg_read(dev, MAX8998_REG_BUCK_ACTIVE_DISCHARGE3);
-		reg |= MAX8998_SAFEOUT1;
-		ret |= pmic_reg_write(dev,
-			MAX8998_REG_BUCK_ACTIVE_DISCHARGE3, reg);
-
-		reg = pmic_reg_read(dev, MAX8998_REG_ONOFF1);
-		reg |= MAX8998_LDO3;
-		ret |= pmic_reg_write(dev, MAX8998_REG_ONOFF1, reg);
-
-		reg = pmic_reg_read(dev, MAX8998_REG_ONOFF2);
-		reg |= MAX8998_LDO8;
-		ret |= pmic_reg_write(dev, MAX8998_REG_ONOFF2, reg);
+		ret |= pmic_set_output(p,
+				       MAX8998_REG_BUCK_ACTIVE_DISCHARGE3,
+				       MAX8998_SAFEOUT1, LDO_ON);
+		ret |= pmic_set_output(p, MAX8998_REG_ONOFF1,
+				      MAX8998_LDO3, LDO_ON);
+		ret |= pmic_set_output(p, MAX8998_REG_ONOFF2,
+				      MAX8998_LDO8, LDO_ON);
 
 	} else {
-		reg = pmic_reg_read(dev, MAX8998_REG_ONOFF2);
-		reg &= ~MAX8998_LDO8;
-		ret |= pmic_reg_write(dev, MAX8998_REG_ONOFF2, reg);
-
-		reg = pmic_reg_read(dev, MAX8998_REG_ONOFF1);
-		reg &= ~MAX8998_LDO3;
-		ret |= pmic_reg_write(dev, MAX8998_REG_ONOFF1, reg);
-
-		reg = pmic_reg_read(dev, MAX8998_REG_BUCK_ACTIVE_DISCHARGE3);
-		reg &= ~MAX8998_SAFEOUT1;
-		ret |= pmic_reg_write(dev,
-			MAX8998_REG_BUCK_ACTIVE_DISCHARGE3, reg);
+		ret |= pmic_set_output(p, MAX8998_REG_ONOFF2,
+				      MAX8998_LDO8, LDO_OFF);
+		ret |= pmic_set_output(p, MAX8998_REG_ONOFF1,
+				      MAX8998_LDO3, LDO_OFF);
+		ret |= pmic_set_output(p,
+				       MAX8998_REG_BUCK_ACTIVE_DISCHARGE3,
+				       MAX8998_SAFEOUT1, LDO_OFF);
 	}
 
 	if (ret) {
 		puts("MAX8998 LDO setting error!\n");
-		return -EINVAL;
+		return -1;
 	}
-
+#endif
 	return 0;
 }
 
@@ -210,25 +205,27 @@ int exynos_early_init_f(void)
 	return 0;
 }
 
-static int init_pmic_lcd(void)
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
+static void init_pmic_lcd(void)
 {
-	struct udevice *dev;
 	unsigned char val;
 	int ret = 0;
 
-	ret = pmic_get("max8998-pmic", &dev);
-	if (ret) {
-		puts("Failed to get MAX8998 for init_pmic_lcd()!\n");
-		return ret;
-	}
+	struct pmic *p = pmic_get("MAX8998_PMIC");
+
+	if (!p)
+		return;
+
+	if (pmic_probe(p))
+		return;
 
 	/* LDO7 1.8V */
 	val = 0x02; /* (1800 - 1600) / 100; */
-	ret |= pmic_reg_write(dev,  MAX8998_REG_LDO7, val);
+	ret |= pmic_reg_write(p,  MAX8998_REG_LDO7, val);
 
 	/* LDO17 3.0V */
 	val = 0xe; /* (3000 - 1600) / 100; */
-	ret |= pmic_reg_write(dev,  MAX8998_REG_LDO17, val);
+	ret |= pmic_reg_write(p,  MAX8998_REG_LDO17, val);
 
 	/* Disable unneeded regulators */
 	/*
@@ -237,29 +234,26 @@ static int init_pmic_lcd(void)
 	 * LDO2 ON, LDO3 OFF, LDO4 OFF, LDO5 ON
 	 */
 	val = 0xB9;
-	ret |= pmic_reg_write(dev,  MAX8998_REG_ONOFF1, val);
+	ret |= pmic_reg_write(p,  MAX8998_REG_ONOFF1, val);
 
 	/* ONOFF2
 	 * LDO6 OFF, LDO7 ON, LDO8 OFF, LDO9 ON,
 	 * LDO10 OFF, LDO11 OFF, LDO12 OFF, LDO13 OFF
 	 */
 	val = 0x50;
-	ret |= pmic_reg_write(dev,  MAX8998_REG_ONOFF2, val);
+	ret |= pmic_reg_write(p,  MAX8998_REG_ONOFF2, val);
 
 	/* ONOFF3
 	 * LDO14 OFF, LDO15 OFF, LGO16 OFF, LDO17 OFF
 	 * EPWRHOLD OFF, EBATTMON OFF, ELBCNFG2 OFF, ELBCNFG1 OFF
 	 */
 	val = 0x00;
-	ret |= pmic_reg_write(dev,  MAX8998_REG_ONOFF3, val);
+	ret |= pmic_reg_write(p,  MAX8998_REG_ONOFF3, val);
 
-	if (ret) {
+	if (ret)
 		puts("LCD pmic initialisation error!\n");
-		return -EINVAL;
-	}
-
-	return 0;
 }
+#endif
 
 void exynos_cfg_lcd_gpio(void)
 {
@@ -316,31 +310,18 @@ void exynos_reset_lcd(void)
 
 void exynos_lcd_power_on(void)
 {
-	struct udevice *dev;
-	int ret;
-	u8 reg;
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
+	struct pmic *p = pmic_get("MAX8998_PMIC");
 
-	ret = pmic_get("max8998-pmic", &dev);
-	if (ret) {
-		puts("Failed to get MAX8998!\n");
+	if (!p)
 		return;
-	}
 
-	reg = pmic_reg_read(dev, MAX8998_REG_ONOFF3);
-	reg |= MAX8998_LDO17;
-	ret = pmic_reg_write(dev, MAX8998_REG_ONOFF3, reg);
-	if (ret) {
-		puts("MAX8998 LDO setting error\n");
+	if (pmic_probe(p))
 		return;
-	}
 
-	reg = pmic_reg_read(dev, MAX8998_REG_ONOFF2);
-	reg |= MAX8998_LDO7;
-	ret = pmic_reg_write(dev, MAX8998_REG_ONOFF2, reg);
-	if (ret) {
-		puts("MAX8998 LDO setting error\n");
-		return;
-	}
+	pmic_set_output(p, MAX8998_REG_ONOFF3, MAX8998_LDO17, LDO_ON);
+	pmic_set_output(p, MAX8998_REG_ONOFF2, MAX8998_LDO7, LDO_ON);
+#endif
 }
 
 void exynos_cfg_ldo(void)
@@ -355,6 +336,9 @@ void exynos_enable_ldo(unsigned int onoff)
 
 int exynos_init(void)
 {
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
+	char buf[16];
+#endif
 	gd->bd->bi_arch_number = MACH_TYPE_UNIVERSAL_C210;
 
 	switch (get_hwrev()) {
@@ -379,6 +363,14 @@ int exynos_init(void)
 		break;
 	}
 
+#ifndef CONFIG_DM_I2C /* TODO(maintainer): Convert to driver model */
+	/* Request soft I2C gpios */
+	strcpy(buf, "soft_i2c_scl");
+	gpio_request(CONFIG_SOFT_I2C_GPIO_SCL, buf);
+
+	strcpy(buf, "soft_i2c_sda");
+	gpio_request(CONFIG_SOFT_I2C_GPIO_SDA, buf);
+#endif
 	check_hw_revision();
 	printf("HW Revision:\t0x%x\n", board_rev);
 

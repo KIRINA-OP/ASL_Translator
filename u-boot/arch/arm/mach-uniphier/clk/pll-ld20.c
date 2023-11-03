@@ -11,7 +11,7 @@
 #include "../sc64-regs.h"
 #include "pll.h"
 
-void uniphier_ld20_pll_init(void)
+int uniphier_ld20_pll_init(const struct uniphier_board_data *bd)
 {
 	uniphier_ld20_sscpll_init(SC_CPLLCTRL, UNIPHIER_PLL_FREQ_DEFAULT, 0, 4);
 	/* do nothing for SPLL */
@@ -36,4 +36,6 @@ void uniphier_ld20_pll_init(void)
 
 	uniphier_ld20_dspll_init(SC_VPLL8KCTRL);
 	uniphier_ld20_dspll_init(SC_A2PLLCTRL);
+
+	return 0;
 }

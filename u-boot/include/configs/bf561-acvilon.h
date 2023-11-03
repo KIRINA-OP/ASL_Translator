@@ -86,6 +86,11 @@
 #define CONFIG_HOSTNAME		bf561-acvilon
 
 /*
+ * Flash Settings
+ */
+#define CONFIG_SYS_NO_FLASH
+
+/*
  * I2C Settings
  */
 #define CONFIG_HARD_I2C

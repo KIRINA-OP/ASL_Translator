@@ -131,15 +131,15 @@ static int pcf8575_ofdata_platdata(struct udevice *dev)
 
 	int n_latch;
 
-	uc_priv->gpio_count = fdtdec_get_int(gd->fdt_blob, dev_of_offset(dev),
+	uc_priv->gpio_count = fdtdec_get_int(gd->fdt_blob, dev->of_offset,
 					     "gpio-count", 16);
-	uc_priv->bank_name = fdt_getprop(gd->fdt_blob, dev_of_offset(dev),
+	uc_priv->bank_name = fdt_getprop(gd->fdt_blob, dev->of_offset,
 					 "gpio-bank-name", NULL);
 	if (!uc_priv->bank_name)
 		uc_priv->bank_name = fdt_get_name(gd->fdt_blob,
-						  dev_of_offset(dev), NULL);
+						  dev->of_offset, NULL);
 
-	n_latch = fdtdec_get_uint(gd->fdt_blob, dev_of_offset(dev),
+	n_latch = fdtdec_get_uint(gd->fdt_blob, dev->of_offset,
 				  "lines-initial-states", 0);
 	plat->out = ~n_latch;
 
