@@ -9,6 +9,7 @@
 #include <asm/arch/hardware.h>
 #include "rockchip-common.h"
 
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_NR_DRAM_BANKS		1
 #define CONFIG_ENV_IS_NOWHERE
 #define CONFIG_ENV_SIZE			0x2000
@@ -36,9 +37,14 @@
 #define CONFIG_ROCKCHIP_CHIP_TAG	"RK30"
 
 /* MMC/SD IP block */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+#define CONFIG_DWMMC
 #define CONFIG_BOUNCE_BUFFER
 
 #define CONFIG_FAT_WRITE
+#define CONFIG_PARTITION_UUIDS
+#define CONFIG_CMD_PART
 
 #define CONFIG_SYS_SDRAM_BASE		0x60000000
 #define CONFIG_NR_DRAM_BANKS		1
@@ -98,6 +104,7 @@
 	BOOTENV
 #endif
 
+#define CONFIG_BOARD_LATE_INIT
 #define CONFIG_PREBOOT
 
 #endif

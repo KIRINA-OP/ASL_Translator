@@ -28,7 +28,6 @@ config SYS_BOARD
 	default "zynqmp"
 
 config SYS_VENDOR
-	string "Vendor name"
 	default "xilinx"
 
 config SYS_SOC

@@ -236,14 +236,13 @@ done:
 	return ret;
 }
 
-static int mmc_spi_set_ios(struct mmc *mmc)
+static void mmc_spi_set_ios(struct mmc *mmc)
 {
 	struct spi_slave *spi = mmc->priv;
 
 	debug("%s: clock %u\n", __func__, mmc->clock);
 	if (mmc->clock)
 		spi_set_speed(spi, mmc->clock);
-	return 0;
 }
 
 static int mmc_spi_init_p(struct mmc *mmc)

@@ -36,9 +36,7 @@ static int arasan_sdhci_probe(struct udevice *dev)
 	host->quirks |= SDHCI_QUIRK_NO_HISPD_BIT;
 #endif
 
-	host->max_clk = CONFIG_ZYNQ_SDHCI_MAX_FREQ;
-
-	ret = sdhci_setup_cfg(&plat->cfg, host, 0,
+	ret = sdhci_setup_cfg(&plat->cfg, host, CONFIG_ZYNQ_SDHCI_MAX_FREQ,
 			      CONFIG_ZYNQ_SDHCI_MIN_FREQ);
 	host->mmc = &plat->mmc;
 	if (ret)

@@ -46,6 +46,7 @@
 #define CONFIG_SETUP_MEMORY_TAGS	/* pass memory defs to kernel */
 #define CONFIG_INITRD_TAG		/* pass initrd param to kernel */
 #define CONFIG_SKIP_LOWLEVEL_INIT_ONLY	/* U-Boot is loaded by a bootloader */
+#define CONFIG_BOARD_EARLY_INIT_F	/* call board_early_init_f() */
 
 /* We set the max number of command args high to avoid HUSH bugs. */
 #define CONFIG_SYS_MAXARGS    32
@@ -83,6 +84,7 @@
 
 /* NAND flash settings */
 #define CONFIG_NAND_ATMEL
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_SYS_MAX_NAND_DEVICE	1
 #define CONFIG_SYS_NAND_BASE		ATMEL_BASE_CS3
 #define CONFIG_SYS_NAND_DBW_8

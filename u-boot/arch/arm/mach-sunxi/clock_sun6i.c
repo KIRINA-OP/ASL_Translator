@@ -21,8 +21,6 @@ void clock_init_safe(void)
 {
 	struct sunxi_ccm_reg * const ccm =
 		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
-
-#if !defined(CONFIG_MACH_SUN8I_H3) && !defined(CONFIG_MACH_SUN50I)
 	struct sunxi_prcm_reg * const prcm =
 		(struct sunxi_prcm_reg *)SUNXI_PRCM_BASE;
 
@@ -33,7 +31,6 @@ void clock_init_safe(void)
 		PRCM_PLL_CTRL_LDO_DIGITAL_EN | PRCM_PLL_CTRL_LDO_ANALOG_EN |
 		PRCM_PLL_CTRL_EXT_OSC_EN | PRCM_PLL_CTRL_LDO_OUT_L(1140));
 	clrbits_le32(&prcm->pll_ctrl1, PRCM_PLL_CTRL_LDO_KEY_MASK);
-#endif
 
 	clock_set_pll1(408000000);
 
@@ -44,8 +41,7 @@ void clock_init_safe(void)
 	writel(AHB1_ABP1_DIV_DEFAULT, &ccm->ahb1_apb1_div);
 
 	writel(MBUS_CLK_DEFAULT, &ccm->mbus0_clk_cfg);
-	if (IS_ENABLED(CONFIG_MACH_SUN6I))
-		writel(MBUS_CLK_DEFAULT, &ccm->mbus1_clk_cfg);
+	writel(MBUS_CLK_DEFAULT, &ccm->mbus1_clk_cfg);
 }
 #endif
 
@@ -59,6 +55,17 @@ void clock_init_sec(void)
 		     CCM_SEC_SWITCH_MBUS_NONSEC |
 		     CCM_SEC_SWITCH_BUS_NONSEC |
 		     CCM_SEC_SWITCH_PLL_NONSEC);
+#endif
+}
+
+void clock_init_quirk(void)
+{
+	/* without this quirk, the USB PHY cannot be used in Linux */
+#ifdef CONFIG_MACH_SUN8I_V3S
+       struct sunxi_ccm_reg * const ccm =
+               (struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
+       setbits_le32(&ccm->ahb_gate0, 1 << AHB_GATE_OFFSET_USB0);
+       setbits_le32(&ccm->ahb_reset0_cfg, 1 << AHB_RESET_OFFSET_OTG);
 #endif
 }
 
@@ -145,6 +152,17 @@ void clock_set_pll3(unsigned int clk)
 	       &ccm->pll3_cfg);
 }
 
+void clock_set_pll3_factors(int m, int n)
+{
+	struct sunxi_ccm_reg * const ccm =
+		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
+
+	/* PLL3 rate = 24000000 * n / m */
+	writel(CCM_PLL3_CTRL_EN | CCM_PLL3_CTRL_INTEGER_MODE |
+	       CCM_PLL3_CTRL_N(n) | CCM_PLL3_CTRL_M(m),
+	       &ccm->pll3_cfg);
+}
+
 void clock_set_pll5(unsigned int clk, bool sigma_delta_enable)
 {
 	struct sunxi_ccm_reg * const ccm =
@@ -217,14 +235,31 @@ done:
 }
 #endif
 
-#if defined(CONFIG_MACH_SUN8I_A33) || defined(CONFIG_MACH_SUN50I)
+void clock_set_pll10(unsigned int clk)
+{
+	struct sunxi_ccm_reg * const ccm =
+		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
+	const int m = 2; /* 12 MHz steps */
+
+	if (clk == 0) {
+		clrbits_le32(&ccm->pll10_cfg, CCM_PLL10_CTRL_EN);
+		return;
+	}
+
+	/* PLL10 rate = 24000000 * n / m */
+	writel(CCM_PLL10_CTRL_EN | CCM_PLL10_CTRL_INTEGER_MODE |
+	       CCM_PLL10_CTRL_N(clk / (24000000 / m)) | CCM_PLL10_CTRL_M(m),
+	       &ccm->pll10_cfg);
+}
+
+#ifdef CONFIG_MACH_SUN8I_A33
 void clock_set_pll11(unsigned int clk, bool sigma_delta_enable)
 {
 	struct sunxi_ccm_reg * const ccm =
 		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
 
 	if (sigma_delta_enable)
-		writel(CCM_PLL11_PATTERN, &ccm->pll11_pattern_cfg0);
+		writel(CCM_PLL11_PATTERN, &ccm->pll5_pattern_cfg);
 
 	writel(CCM_PLL11_CTRL_EN | CCM_PLL11_CTRL_UPD |
 	       (sigma_delta_enable ? CCM_PLL11_CTRL_SIGMA_DELTA_EN : 0) |
@@ -280,5 +315,17 @@ void clock_set_de_mod_clock(u32 *clk_cfg, unsigned int hz)
 		div++;
 
 	writel(CCM_DE_CTRL_GATE | CCM_DE_CTRL_PLL6_2X | CCM_DE_CTRL_M(div),
+	       clk_cfg);
+}
+
+void clock_set_de2_mod_clock(u32 *clk_cfg, unsigned int hz)
+{
+	int pll = clock_get_pll6() * 2;
+	int div = 1;
+
+	while ((pll / div) > hz)
+		div++;
+
+	writel(CCM_DE2_CTRL_GATE | CCM_DE2_CTRL_PLL6_2X | CCM_DE2_CTRL_M(div),
 	       clk_cfg);
 }

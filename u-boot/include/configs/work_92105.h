@@ -18,13 +18,15 @@
  * Define work_92105 machine type by hand -- done only for compatibility
  * with original board code
  */
-#define CONFIG_MACH_TYPE		736
+#define MACH_TYPE_WORK_92105		736
+#define CONFIG_MACH_TYPE		MACH_TYPE_WORK_92105
 
 #define CONFIG_SYS_ICACHE_OFF
 #define CONFIG_SYS_DCACHE_OFF
 #if !defined(CONFIG_SPL_BUILD)
 #define CONFIG_SKIP_LOWLEVEL_INIT
 #endif
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOARD_EARLY_INIT_R
 
 /* generate LPC32XX-specific SPL image */
@@ -106,6 +108,13 @@
 
 #define CONFIG_AUTO_COMPLETE
 #define CONFIG_CMDLINE_EDITING
+#define CONFIG_DOS_PARTITION
+
+/*
+ * No NOR
+ */
+
+#define CONFIG_SYS_NO_FLASH
 
 /*
  * NAND chip timings for FIXME: which one?

@@ -7,10 +7,6 @@
 # SPDX-License-Identifier:	GPL-2.0
 #
 
-hostprogs-$(CONFIG_BUILD_BIN2C)		+= bin2c
-
-always		:= $(hostprogs-y)
-
 # The following hostprogs-y programs are only build on demand
 hostprogs-y += docproc
 

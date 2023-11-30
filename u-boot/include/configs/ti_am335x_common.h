@@ -56,7 +56,7 @@
  * supports X-MODEM loading via UART, and we leverage this and then use
  * Y-MODEM to load u-boot.img, when booted over UART.
  */
-#define CONFIG_SPL_TEXT_BASE		CONFIG_ISW_ENTRY_ADDR
+#define CONFIG_SPL_TEXT_BASE		0x402F0400
 #define CONFIG_SYS_SPL_ARGS_ADDR	(CONFIG_SYS_SDRAM_BASE + \
 					 (128 << 20))
 
@@ -75,6 +75,9 @@
  * we need to call board_early_init_f.  This is taken care of in
  * s_init when we have SPL used.
  */
+#if !defined(CONFIG_SKIP_LOWLEVEL_INIT) && !defined(CONFIG_SPL)
+#define CONFIG_BOARD_EARLY_INIT_F
+#endif
 
 #ifdef CONFIG_NAND
 #define CONFIG_SPL_NAND_AM33XX_BCH	/* ELM support */

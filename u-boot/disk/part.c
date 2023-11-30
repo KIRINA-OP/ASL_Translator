@@ -190,13 +190,13 @@ void dev_print (struct blk_desc *dev_desc)
 			printf ("            Supports 48-bit addressing\n");
 #endif
 #if defined(CONFIG_SYS_64BIT_LBA)
-		printf ("            Capacity: %lu.%lu MB = %lu.%lu GB (%llu x %lu)\n",
+		printf ("            Capacity: %ld.%ld MB = %ld.%ld GB (%Ld x %ld)\n",
 			mb_quot, mb_rem,
 			gb_quot, gb_rem,
 			lba,
 			dev_desc->blksz);
 #else
-		printf ("            Capacity: %lu.%lu MB = %lu.%lu GB (%lu x %lu)\n",
+		printf ("            Capacity: %ld.%ld MB = %ld.%ld GB (%ld x %ld)\n",
 			mb_quot, mb_rem,
 			gb_quot, gb_rem,
 			(ulong)lba,
@@ -234,11 +234,11 @@ void part_init(struct blk_desc *dev_desc)
 
 static void print_part_header(const char *type, struct blk_desc *dev_desc)
 {
-#if CONFIG_IS_ENABLED(MAC_PARTITION) || \
-	CONFIG_IS_ENABLED(DOS_PARTITION) || \
-	CONFIG_IS_ENABLED(ISO_PARTITION) || \
-	CONFIG_IS_ENABLED(AMIGA_PARTITION) || \
-	CONFIG_IS_ENABLED(EFI_PARTITION)
+#if defined(CONFIG_MAC_PARTITION) || \
+	defined(CONFIG_DOS_PARTITION) || \
+	defined(CONFIG_ISO_PARTITION) || \
+	defined(CONFIG_AMIGA_PARTITION) || \
+	defined(CONFIG_EFI_PARTITION)
 	puts ("\nPartition Map for ");
 	switch (dev_desc->if_type) {
 	case IF_TYPE_IDE:
@@ -299,7 +299,7 @@ int part_get_info(struct blk_desc *dev_desc, int part,
 #ifdef HAVE_BLOCK_DEVICE
 	struct part_driver *drv;
 
-#if CONFIG_IS_ENABLED(PARTITION_UUIDS)
+#ifdef CONFIG_PARTITION_UUIDS
 	/* The common case is no UUID support */
 	info->uuid[0] = 0;
 #endif
@@ -416,7 +416,7 @@ int blk_get_device_part_str(const char *ifname, const char *dev_part_str,
 		info->bootable = 0;
 		strcpy((char *)info->type, BOOT_PART_TYPE);
 		strcpy((char *)info->name, "Sandbox host");
-#if CONFIG_IS_ENABLED(PARTITION_UUIDS)
+#ifdef CONFIG_PARTITION_UUIDS
 		info->uuid[0] = 0;
 #endif
 #ifdef CONFIG_PARTITION_TYPE_GUID
@@ -442,7 +442,7 @@ int blk_get_device_part_str(const char *ifname, const char *dev_part_str,
 		memset(info, 0, sizeof(*info));
 		strcpy((char *)info->type, BOOT_PART_TYPE);
 		strcpy((char *)info->name, "UBI");
-#if CONFIG_IS_ENABLED(PARTITION_UUIDS)
+#ifdef CONFIG_PARTITION_UUIDS
 		info->uuid[0] = 0;
 #endif
 		return 0;
@@ -526,7 +526,7 @@ int blk_get_device_part_str(const char *ifname, const char *dev_part_str,
 		info->bootable = 0;
 		strcpy((char *)info->type, BOOT_PART_TYPE);
 		strcpy((char *)info->name, "Whole Disk");
-#if CONFIG_IS_ENABLED(PARTITION_UUIDS)
+#ifdef CONFIG_PARTITION_UUIDS
 		info->uuid[0] = 0;
 #endif
 #ifdef CONFIG_PARTITION_TYPE_GUID

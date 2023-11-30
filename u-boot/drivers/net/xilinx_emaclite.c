@@ -604,15 +604,15 @@ static int emaclite_ofdata_to_platdata(struct udevice *dev)
 
 	emaclite->phyaddr = -1;
 
-	offset = fdtdec_lookup_phandle(gd->fdt_blob, dev_of_offset(dev),
+	offset = fdtdec_lookup_phandle(gd->fdt_blob, dev->of_offset,
 				      "phy-handle");
 	if (offset > 0)
 		emaclite->phyaddr = fdtdec_get_int(gd->fdt_blob, offset,
 						   "reg", -1);
 
-	emaclite->txpp = fdtdec_get_int(gd->fdt_blob, dev_of_offset(dev),
+	emaclite->txpp = fdtdec_get_int(gd->fdt_blob, dev->of_offset,
 					"xlnx,tx-ping-pong", 0);
-	emaclite->rxpp = fdtdec_get_int(gd->fdt_blob, dev_of_offset(dev),
+	emaclite->rxpp = fdtdec_get_int(gd->fdt_blob, dev->of_offset,
 					"xlnx,rx-ping-pong", 0);
 
 	printf("EMACLITE: %lx, phyaddr %d, %d/%d\n", (ulong)emaclite->regs,

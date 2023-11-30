@@ -19,6 +19,7 @@
 #define CONFIG_SYS_BOOTM_LEN		(16 << 20)
 
 /*#define CONFIG_MACH_TYPE		3589	 Until the next sync */
+#define CONFIG_BOARD_LATE_INIT
 
 /* Clock Defines */
 #define V_OSCK				24000000  /* Clock output from T2 */
@@ -26,6 +27,10 @@
 
 /* Always 128 KiB env size */
 #define CONFIG_ENV_SIZE			(128 << 10)
+
+/* Enhance our eMMC support / experience. */
+#define CONFIG_CMD_GPT
+#define CONFIG_EFI_PARTITION
 
 #define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 
@@ -94,6 +99,8 @@
 /* disable host part of MUSB in SPL */
 #undef CONFIG_MUSB_HOST
 /* disable EFI partitions and partition UUID support */
+#undef CONFIG_PARTITION_UUIDS
+#undef CONFIG_EFI_PARTITION
 #endif
 
 #if defined(CONFIG_EMMC_BOOT)

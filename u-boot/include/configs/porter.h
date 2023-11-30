@@ -44,6 +44,7 @@
 #define CONFIG_SPI
 #define CONFIG_SH_QSPI
 #define CONFIG_SPI_FLASH_QUAD
+#define CONFIG_SYS_NO_FLASH
 
 /* SH Ether */
 #define CONFIG_SH_ETHER
@@ -87,6 +88,8 @@
 #define CONFIG_USB_MAX_CONTROLLER_COUNT	2
 
 /* SD */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
 #define CONFIG_SH_SDHI_FREQ	97500000
 
 /* Module stop status bits */

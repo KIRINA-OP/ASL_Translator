@@ -38,7 +38,8 @@ SECTIONS
 	} >.sram
 	. = ALIGN(4);
 
-	.machine_param : { *(.machine_param) } >.sram
+	/* Align .machine_param on 256 byte boundary for easier searching */
+	.machine_param ALIGN(0x100) : { *(.machine_param) } >.sram
 	. = ALIGN(4);
 
 	__image_copy_end = .;

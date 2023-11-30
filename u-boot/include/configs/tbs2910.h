@@ -16,6 +16,8 @@
 
 #define CONFIG_MACH_TYPE		3980
 
+#define CONFIG_BOARD_EARLY_INIT_F
+
 #define CONFIG_SYS_HZ			1000
 
 #define CONFIG_IMX_THERMAL
@@ -48,8 +50,11 @@
 
 /* *** Command definition *** */
 #define CONFIG_CMD_BMODE
+#define CONFIG_CMD_PART
 
 /* Filesystems / image support */
+#define CONFIG_EFI_PARTITION
+#define CONFIG_PARTITION_UUIDS
 
 /* MMC */
 #define CONFIG_SYS_FSL_USDHC_NUM	3

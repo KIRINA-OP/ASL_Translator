@@ -132,6 +132,6 @@ typedef int (*sfi_table_handler) (struct sfi_table_header *table);
  * @base:	Address to write table to
  * @return address to use for the next table
  */
-ulong write_sfi_table(ulong base);
+u32 write_sfi_table(u32 base);
 
 #endif /*_LINUX_SFI_H */

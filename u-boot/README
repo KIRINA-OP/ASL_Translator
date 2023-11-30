@@ -376,6 +376,15 @@ The following options need to be configured:
 		Defines the string to utilize when trying to match PCIe device
 		tree nodes for the given platform.
 
+		CONFIG_SYS_PPC_E500_DEBUG_TLB
+
+		Enables a temporary TLB entry to be used during boot to work
+		around limitations in e500v1 and e500v2 external debugger
+		support. This reduces the portions of the boot code where
+		breakpoints and single stepping do not work.  The value of this
+		symbol should be set to the TLB1 entry to be used for this
+		purpose.
+
 		CONFIG_SYS_FSL_ERRATUM_A004510
 
 		Enables a workaround for erratum A004510.  If set,
@@ -503,12 +512,6 @@ The following options need to be configured:
 
 		CONFIG_SYS_FSL_IFC_LE
 		Defines the IFC controller register space as Little Endian
-
-		CONFIG_SYS_FSL_IFC_CLK_DIV
-		Defines divider of platform clock(clock input to IFC controller).
-
-		CONFIG_SYS_FSL_LBC_CLK_DIV
-		Defines divider of platform clock(clock input to eLBC controller).
 
 		CONFIG_SYS_FSL_PBL_PBI
 		It enables addition of RCW (Power on reset configuration) in built image.
@@ -1463,6 +1466,9 @@ The following options need to be configured:
 			CONFIG_SH_MMCIF_CLK
 			Define the clock frequency for MMCIF
 
+		CONFIG_GENERIC_MMC
+		Enable the generic MMC driver
+
 		CONFIG_SUPPORT_EMMC_BOOT
 		Enable some additional features of the eMMC boot partitions.
 
@@ -1771,6 +1777,12 @@ The following options need to be configured:
 		can be displayed via the splashscreen support or the
 		bmp command.
 
+- Do compressing for memory range:
+		CONFIG_CMD_ZIP
+
+		If this option is set, it would use zlib deflate method
+		to compress the specified memory at its best effort.
+
 - Compression support:
 		CONFIG_GZIP
 
@@ -2030,7 +2042,7 @@ The following options need to be configured:
 
 		A byte containing the id of the VLAN.
 
-- Status LED:	CONFIG_LED_STATUS
+- Status LED:	CONFIG_STATUS_LED
 
 		Several configurations allow to display the current
 		status using a LED. For instance, the LED will blink
@@ -2038,15 +2050,15 @@ The following options need to be configured:
 		soon as a reply to a BOOTP request was received, and
 		start blinking slow once the Linux kernel is running
 		(supported by a status LED driver in the Linux
-		kernel). Defining CONFIG_LED_STATUS enables this
+		kernel). Defining CONFIG_STATUS_LED enables this
 		feature in U-Boot.
 
 		Additional options:
 
-		CONFIG_LED_STATUS_GPIO
+		CONFIG_GPIO_LED
 		The status LED can be connected to a GPIO pin.
 		In such cases, the gpio_led driver can be used as a
-		status LED backend implementation. Define CONFIG_LED_STATUS_GPIO
+		status LED backend implementation. Define CONFIG_GPIO_LED
 		to include the gpio_led driver in the U-Boot binary.
 
 		CONFIG_GPIO_LED_INVERTED_TABLE
@@ -2779,6 +2791,19 @@ The following options need to be configured:
 		explicitly loaded later by U-Boot code. With CONFIG_OF_CONTROL
 		this is instead controlled by the value of
 		/config/load-environment.
+
+- Parallel Flash support:
+		CONFIG_SYS_NO_FLASH
+
+		Traditionally U-Boot was run on systems with parallel NOR
+		flash. This option is used to disable support for parallel NOR
+		flash. This option should be defined if the board does not have
+		parallel flash.
+
+		If this option is not defined one of the generic flash drivers
+		(e.g.  CONFIG_FLASH_CFI_DRIVER or CONFIG_ST_SMI) must be
+		selected or the board must provide an implementation of the
+		flash API (see include/flash.h).
 
 - DataFlash Support:
 		CONFIG_HAS_DATAFLASH
@@ -4567,6 +4592,12 @@ Low Level (hardware related) configuration options:
 		it maintains its own little RAM buffer which contains all
 		addressable memory. This option causes some memory accesses
 		to be mapped through map_sysmem() / unmap_sysmem().
+
+- CONFIG_USE_ARCH_MEMCPY
+  CONFIG_USE_ARCH_MEMSET
+		If these options are used a optimized version of memcpy/memset will
+		be used if available. These functions may be faster under some
+		conditions but may increase the binary size.
 
 - CONFIG_X86_RESET_VECTOR
 		If defined, the x86 reset vector code is included. This is not

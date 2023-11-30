@@ -159,8 +159,6 @@ static inline unsigned int cpuid_edx(unsigned int op)
 	return edx;
 }
 
-#if !CONFIG_IS_ENABLED(X86_64)
-
 /* Standard macro to see if a specific flag is changeable */
 static inline int flag_is_changeable_p(uint32_t flag)
 {
@@ -181,7 +179,6 @@ static inline int flag_is_changeable_p(uint32_t flag)
 		: "ir" (flag));
 	return ((f1^f2) & flag) != 0;
 }
-#endif
 
 static inline void mfence(void)
 {
@@ -262,15 +259,6 @@ void cpu_call32(ulong code_seg32, ulong target, ulong table);
  * @target:	Pointer to the start of the kernel image
  */
 int cpu_jump_to_64bit(ulong setup_base, ulong target);
-
-/**
- * cpu_jump_to_64bit_uboot() - special function to jump from SPL to U-Boot
- *
- * This handles calling from 32-bit SPL to 64-bit U-Boot.
- *
- * @target:	Address of U-Boot in RAM
- */
-int cpu_jump_to_64bit_uboot(ulong target);
 
 /**
  * cpu_get_family_model() - Get the family and model for the CPU

@@ -128,12 +128,15 @@
  * SDH Settings
  */
 #if !defined(__ADSPBF512__)
+#define CONFIG_GENERIC_MMC
+#define CONFIG_MMC
 #define CONFIG_BFIN_SDH
 #endif
 
 /*
  * Misc Settings
  */
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_MISC_INIT_R
 #define CONFIG_RTC_BFIN
 #define CONFIG_UART_CONSOLE	0

@@ -158,6 +158,7 @@
 #ifdef CONFIG_USE_NAND
 #undef CONFIG_ENV_IS_IN_FLASH
 #define CONFIG_NAND_DAVINCI
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_ENV_IS_IN_NAND		/* U-Boot env in NAND Flash  */
 #define CONFIG_ENV_OFFSET		0x0 /* Block 0--not used by bootcode */
 #define CONFIG_ENV_SIZE			(128 << 9)
@@ -202,6 +203,7 @@
 
 #ifdef CONFIG_SYS_USE_NOR
 #define CONFIG_ENV_IS_IN_FLASH
+#undef CONFIG_SYS_NO_FLASH
 #define CONFIG_FLASH_CFI_DRIVER
 #define CONFIG_SYS_FLASH_CFI
 #define CONFIG_SYS_FLASH_PROTECTION
@@ -223,6 +225,7 @@
 #define CONFIG_ENV_SIZE			(64 << 10)
 #define CONFIG_ENV_OFFSET		(256 << 10)
 #define CONFIG_ENV_SECT_SIZE		(64 << 10)
+#define CONFIG_SYS_NO_FLASH
 #endif
 
 /*
@@ -243,6 +246,7 @@
  * U-Boot general configuration
  */
 #define CONFIG_MISC_INIT_R
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOOTFILE		"zImage" /* Boot file name */
 #define CONFIG_SYS_CBSIZE	1024 /* Console I/O Buffer Size	*/
 #define CONFIG_SYS_PBSIZE	(CONFIG_SYS_CBSIZE+sizeof(CONFIG_SYS_PROMPT)+16)
@@ -311,16 +315,25 @@
 #define CONFIG_CMD_UBIFS
 #endif
 
+#ifdef CONFIG_USE_SPIFLASH
+#endif
+
 #if !defined(CONFIG_USE_NAND) && \
 	!defined(CONFIG_SYS_USE_NOR) && \
 	!defined(CONFIG_USE_SPIFLASH)
 #define CONFIG_ENV_IS_NOWHERE
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_ENV_SIZE		(16 << 10)
 #undef CONFIG_CMD_ENV
 #endif
 
 /* SD/MMC */
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+#define CONFIG_DAVINCI_MMC
+
 #ifdef CONFIG_MMC
+#define CONFIG_DOS_PARTITION
 #undef CONFIG_ENV_IS_IN_MMC
 #endif
 

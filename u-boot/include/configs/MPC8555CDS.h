@@ -14,6 +14,8 @@
 #define __CONFIG_H
 
 /* High Level Configuration Options */
+#define CONFIG_BOOKE		1	/* BOOKE */
+#define CONFIG_E500		1	/* BOOKE e500 family */
 #define CONFIG_CPM2		1	/* has CPM2 */
 
 #define	CONFIG_SYS_TEXT_BASE	0xfff80000
@@ -43,6 +45,7 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_SYS_CCSRBAR_PHYS_LOW	CONFIG_SYS_CCSRBAR
 
 /* DDR Setup */
+#define CONFIG_SYS_FSL_DDR1
 #define CONFIG_SPD_EEPROM		/* Use SPD EEPROM for DDR setup*/
 #define CONFIG_DDR_SPD
 #undef CONFIG_FSL_DDR_INTERACTIVE
@@ -52,6 +55,7 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_SYS_DDR_SDRAM_BASE	0x00000000	/* DDR is system memory*/
 #define CONFIG_SYS_SDRAM_BASE		CONFIG_SYS_DDR_SDRAM_BASE
 
+#define CONFIG_NUM_DDR_CONTROLLERS	1
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 

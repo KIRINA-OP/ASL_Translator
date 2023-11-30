@@ -18,6 +18,7 @@
 
 #define	CONFIG_SYS_TEXT_BASE	0xFE000000
 
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_MISC_INIT_R
 #define CONFIG_HWCONFIG
 
@@ -450,6 +451,7 @@
 #ifdef CONFIG_FSL_SATA
 #define CONFIG_LBA48
 #define CONFIG_CMD_SATA
+#define CONFIG_DOS_PARTITION
 #endif
 
 /*
@@ -462,6 +464,7 @@
 	#define CONFIG_ENV_SECT_SIZE	0x10000	/* 64K (one sector) for env */
 	#define CONFIG_ENV_SIZE		0x4000
 #else
+	#define CONFIG_SYS_NO_FLASH	1	/* Flash is not usable now */
 	#define CONFIG_ENV_IS_NOWHERE	1	/* Store ENV in memory only */
 	#define CONFIG_ENV_ADDR		(CONFIG_SYS_MONITOR_BASE-0x1000)
 	#define CONFIG_ENV_SIZE		0x2000
@@ -492,10 +495,14 @@
 
 #undef CONFIG_WATCHDOG		/* watchdog disabled */
 
+#define CONFIG_MMC     1
+
 #ifdef CONFIG_MMC
 #define CONFIG_FSL_ESDHC
 #define CONFIG_FSL_ESDHC_PIN_MUX
 #define CONFIG_SYS_FSL_ESDHC_ADDR	CONFIG_SYS_MPC83xx_ESDHC_ADDR
+#define CONFIG_GENERIC_MMC
+#define CONFIG_DOS_PARTITION
 #endif
 
 /*

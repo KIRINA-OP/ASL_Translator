@@ -1,4 +1,4 @@
-if TARGET_CHROMEBOOK_LINK || TARGET_CHROMEBOOK_LINK64
+if TARGET_CHROMEBOOK_LINK
 
 config SYS_BOARD
 	default "chromebook_link"
@@ -13,8 +13,7 @@ config SYS_CONFIG_NAME
 	default "chromebook_link"
 
 config SYS_TEXT_BASE
-	default 0xfff00000 if !SUPPORT_SPL
-	default 0x10000000 if SUPPORT_SPL
+	default 0xfff00000
 
 config BOARD_SPECIFIC_OPTIONS # dummy
 	def_bool y

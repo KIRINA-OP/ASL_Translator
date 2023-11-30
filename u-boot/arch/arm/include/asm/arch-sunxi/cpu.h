@@ -13,7 +13,4 @@
 #include <asm/arch/cpu_sun4i.h>
 #endif
 
-#define SOCID_A64	0x1689
-#define SOCID_H3	0x1680
-
 #endif /* _SUNXI_CPU_H */

@@ -190,7 +190,17 @@ void i2c_init(int speed, int slaveaddr)
 	iip->iic_rpbase = 0;
 #endif
 
+#ifdef CONFIG_SYS_ALLOC_DPRAM
+	dpaddr = iip->iic_rbase;
+	if (dpaddr == 0) {
+		/* need to allocate dual port ram */
+		dpaddr = dpram_alloc_align((NUM_RX_BDS * sizeof(I2C_BD)) +
+					   (NUM_TX_BDS * sizeof(I2C_BD)) +
+					   MAX_TX_SPACE, 8);
+	}
+#else
 	dpaddr = CPM_I2C_BASE;
+#endif
 
 	/*
 	 * initialise data in dual port ram:

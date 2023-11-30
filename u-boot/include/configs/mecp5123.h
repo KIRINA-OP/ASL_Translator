@@ -35,6 +35,7 @@
 
 #define CONFIG_SYS_MPC512X_CLKIN	33333333	/* in Hz */
 
+#define CONFIG_BOARD_EARLY_INIT_F		/* call board_early_init_f() */
 #define CONFIG_MISC_INIT_R
 
 #define CONFIG_SYS_IMMR		        0x80000000
@@ -294,6 +295,7 @@
 #undef CONFIG_CMD_FUSE
 #undef CONFIG_CMD_IDE
 #define CONFIG_CMD_JFFS2
+#define CONFIG_DOS_PARTITION
 
 /*
  * Watchdog timeout = CONFIG_SYS_WATCHDOG_VALUE * 65536 / IPS clock.

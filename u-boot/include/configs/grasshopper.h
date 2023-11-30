@@ -62,6 +62,7 @@
 #define CONFIG_USART_BASE		ATMEL_BASE_USART1
 #define CONFIG_USART_ID			1
 
+#define CONFIG_BOARD_EARLY_INIT_F
 #define CONFIG_BOARD_EARLY_INIT_R
 
 /* User serviceable stuff */

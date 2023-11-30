@@ -18,9 +18,6 @@
 #include <usb.h>
 #include <fs.h>
 #include <mmc.h>
-#ifdef CONFIG_BLK
-#include <blk.h>
-#endif
 #include <u-boot/sha1.h>
 #include <u-boot/sha256.h>
 
@@ -119,9 +116,7 @@ static int mmc_burn_image(size_t image_size)
 	ulong		blk_written;
 	int		err;
 	const u8	mmc_dev_num = CONFIG_SYS_MMC_ENV_DEV;
-#ifdef CONFIG_BLK
-	struct blk_desc *blk_desc;
-#endif
+
 	mmc = find_mmc_device(mmc_dev_num);
 	if (!mmc) {
 		printf("No SD/MMC/eMMC card found\n");
@@ -149,27 +144,13 @@ static int mmc_burn_image(size_t image_size)
 	 * MMC/eMMC boots from LBA-0
 	 */
 	start_lba = IS_SD(mmc) ? 1 : 0;
-#ifdef CONFIG_BLK
-	blk_count = image_size / mmc->write_bl_len;
-	if (image_size % mmc->write_bl_len)
-		blk_count += 1;
-
-	blk_desc = mmc_get_blk_desc(mmc);
-	if (!blk_desc) {
-		printf("Error - failed to obtain block descriptor\n");
-		return -ENODEV;
-	}
-	blk_written = blk_dwrite(blk_desc, start_lba, blk_count,
-				 (void *)get_load_addr());
-#else
 	blk_count = image_size / mmc->block_dev.blksz;
 	if (image_size % mmc->block_dev.blksz)
 		blk_count += 1;
 
 	blk_written = mmc->block_dev.block_write(mmc_dev_num,
-						 start_lba, blk_count,
-						 (void *)get_load_addr());
-#endif /* CONFIG_BLK */
+						start_lba, blk_count,
+						(void *)get_load_addr());
 	if (blk_written != blk_count) {
 		printf("Error - written %#lx blocks\n", blk_written);
 		return -ENOSPC;

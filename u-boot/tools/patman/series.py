@@ -235,8 +235,7 @@ class Series(dict):
 
         if cover_fname:
             cover_cc = gitutil.BuildEmailList(self.get('cover_cc', ''))
-            cc_list = ', '.join([x.decode('utf-8') for x in set(cover_cc + all_ccs)])
-            print(cover_fname, cc_list.encode('utf-8'), file=fd)
+            print(cover_fname, ', '.join(set(cover_cc + all_ccs)), file=fd)
 
         fd.close()
         return fname

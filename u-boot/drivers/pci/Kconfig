@@ -9,7 +9,7 @@ menuconfig PCI
 if PCI
 
 config DM_PCI
-	bool "Enable driver model for PCI"
+	bool "Enable driver mode for PCI"
 	depends on DM
 	help
 	  Use driver model for PCI. Driver model is the new method for
@@ -70,13 +70,5 @@ config PCI_XILINX
 	help
 	  Enable support for the Xilinx AXI bridge for PCI express, an IP block
 	  which can be used on some generations of Xilinx FPGAs.
-
-config PCIE_LAYERSCAPE
-	bool "Layerscape PCIe support"
-	depends on DM_PCI
-	help
-	  Support Layerscape PCIe. The Layerscape SoC may have one or several
-	  PCIe controllers. The PCIe may works in RC or EP mode according to
-	  RCW[HOST_AGT_PEX] setting.
 
 endif

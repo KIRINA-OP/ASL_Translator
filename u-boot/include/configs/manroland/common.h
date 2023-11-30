@@ -15,6 +15,9 @@
 
 #define CONFIG_BOARD_EARLY_INIT_R
 
+/* Partitions */
+#define CONFIG_DOS_PARTITION
+
 /*
  * Command line configuration.
  */

@@ -489,7 +489,7 @@ static int i2c_post_probe(struct udevice *dev)
 #if CONFIG_IS_ENABLED(OF_CONTROL)
 	struct dm_i2c_bus *i2c = dev_get_uclass_priv(dev);
 
-	i2c->speed_hz = fdtdec_get_int(gd->fdt_blob, dev_of_offset(dev),
+	i2c->speed_hz = fdtdec_get_int(gd->fdt_blob, dev->of_offset,
 				     "clock-frequency", 100000);
 
 	return dm_i2c_set_bus_speed(dev, i2c->speed_hz);
@@ -503,11 +503,10 @@ static int i2c_child_post_bind(struct udevice *dev)
 #if CONFIG_IS_ENABLED(OF_CONTROL)
 	struct dm_i2c_chip *plat = dev_get_parent_platdata(dev);
 
-	if (dev_of_offset(dev) == -1)
+	if (dev->of_offset == -1)
 		return 0;
 
-	return i2c_chip_ofdata_to_platdata(gd->fdt_blob, dev_of_offset(dev),
-					   plat);
+	return i2c_chip_ofdata_to_platdata(gd->fdt_blob, dev->of_offset, plat);
 #else
 	return 0;
 #endif

@@ -61,6 +61,9 @@
 #define CONFIG_SYS_XLB_PIPELINING	1
 
 /* Partitions */
+#define CONFIG_MAC_PARTITION
+#define CONFIG_DOS_PARTITION
+#define CONFIG_ISO_PARTITION
 
 /*
  * BOOTP options

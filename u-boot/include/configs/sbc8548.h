@@ -36,6 +36,8 @@
 /*
  * High Level Configuration Options
  */
+#define CONFIG_BOOKE		1	/* BOOKE */
+#define CONFIG_E500		1	/* BOOKE e500 family */
 #define CONFIG_SBC8548		1	/* SBC8548 board specific */
 
 /*
@@ -86,6 +88,8 @@
  */
 #define CONFIG_ENABLE_36BIT_PHYS	1
 
+#define CONFIG_BOARD_EARLY_INIT_F	1	/* Call board_pre_init */
+
 #undef	CONFIG_SYS_DRAM_TEST			/* memory test, takes time */
 #define CONFIG_SYS_MEMTEST_START	0x00200000	/* memtest works on */
 #define CONFIG_SYS_MEMTEST_END		0x00400000
@@ -94,6 +98,7 @@
 #define CONFIG_SYS_CCSRBAR_PHYS_LOW	CONFIG_SYS_CCSRBAR
 
 /* DDR Setup */
+#define CONFIG_SYS_FSL_DDR2
 #undef CONFIG_FSL_DDR_INTERACTIVE
 #undef CONFIG_DDR_ECC			/* only for ECC DDR module */
 /*
@@ -114,6 +119,7 @@
 #define CONFIG_SYS_SDRAM_BASE		CONFIG_SYS_DDR_SDRAM_BASE
 #define CONFIG_VERY_BIG_RAM
 
+#define CONFIG_NUM_DDR_CONTROLLERS	1
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 #define CONFIG_CHIP_SELECTS_PER_CTRL	2
 

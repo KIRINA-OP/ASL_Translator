@@ -7,8 +7,6 @@
 #include <common.h>
 #include <asm/e820.h>
 
-DECLARE_GLOBAL_DATA_PTR;
-
 unsigned install_e820_map(unsigned max_entries, struct e820entry *entries)
 {
 	entries[0].addr = 0;

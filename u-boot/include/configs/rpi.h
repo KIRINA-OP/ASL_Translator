@@ -63,6 +63,9 @@
 #define CONFIG_SYS_MEMTEST_END		0x00200000
 #define CONFIG_LOADADDR			0x00200000
 
+/* Flash */
+#define CONFIG_SYS_NO_FLASH
+
 /* Devices */
 /* GPIO */
 #define CONFIG_BCM2835_GPIO
@@ -77,6 +80,13 @@
 #define CONFIG_FB_ADDR			0
 #define CONFIG_VIDEO_BCM2835
 #define CONFIG_SYS_WHITE_ON_BLACK
+
+/* SD/MMC configuration */
+#define CONFIG_GENERIC_MMC
+#define CONFIG_MMC
+#define CONFIG_SDHCI
+#define CONFIG_MMC_SDHCI_IO_ACCESSORS
+#define CONFIG_BCM2835_SDHCI
 
 #ifdef CONFIG_CMD_USB
 #define CONFIG_USB_DWC2
@@ -120,6 +130,10 @@
 /* Shell */
 #define CONFIG_SYS_MAXARGS		16
 #define CONFIG_COMMAND_HISTORY
+
+/* Commands */
+#define CONFIG_PARTITION_UUIDS
+#define CONFIG_CMD_PART
 
 /* ATAGs support for bootm/bootz */
 #define CONFIG_SETUP_MEMORY_TAGS

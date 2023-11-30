@@ -14,7 +14,6 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
-#include <openssl/engine.h>
 
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
 #define HAVE_ERR_REMOVE_THREAD_STATE
@@ -32,14 +31,14 @@ static int rsa_err(const char *msg)
 }
 
 /**
- * rsa_pem_get_pub_key() - read a public key from a .crt file
+ * rsa_get_pub_key() - read a public key from a .crt file
  *
  * @keydir:	Directory containins the key
  * @name	Name of key file (will have a .crt extension)
  * @rsap	Returns RSA object, or NULL on failure
  * @return 0 if ok, -ve on error (in which case *rsap will be set to NULL)
  */
-static int rsa_pem_get_pub_key(const char *keydir, const char *name, RSA **rsap)
+static int rsa_get_pub_key(const char *keydir, const char *name, RSA **rsap)
 {
 	char path[1024];
 	EVP_PKEY *key;
@@ -97,90 +96,14 @@ err_cert:
 }
 
 /**
- * rsa_engine_get_pub_key() - read a public key from given engine
+ * rsa_get_priv_key() - read a private key from a .key file
  *
- * @keydir:	Key prefix
- * @name	Name of key
- * @engine	Engine to use
- * @rsap	Returns RSA object, or NULL on failure
- * @return 0 if ok, -ve on error (in which case *rsap will be set to NULL)
- */
-static int rsa_engine_get_pub_key(const char *keydir, const char *name,
-				  ENGINE *engine, RSA **rsap)
-{
-	const char *engine_id;
-	char key_id[1024];
-	EVP_PKEY *key;
-	RSA *rsa;
-	int ret;
-
-	*rsap = NULL;
-
-	engine_id = ENGINE_get_id(engine);
-
-	if (engine_id && !strcmp(engine_id, "pkcs11")) {
-		if (keydir)
-			snprintf(key_id, sizeof(key_id),
-				 "pkcs11:%s;object=%s;type=public",
-				 keydir, name);
-		else
-			snprintf(key_id, sizeof(key_id),
-				 "pkcs11:object=%s;type=public",
-				 name);
-	} else {
-		fprintf(stderr, "Engine not supported\n");
-		return -ENOTSUP;
-	}
-
-	key = ENGINE_load_public_key(engine, key_id, NULL, NULL);
-	if (!key)
-		return rsa_err("Failure loading public key from engine");
-
-	/* Convert to a RSA_style key. */
-	rsa = EVP_PKEY_get1_RSA(key);
-	if (!rsa) {
-		rsa_err("Couldn't convert to a RSA style key");
-		ret = -EINVAL;
-		goto err_rsa;
-	}
-
-	EVP_PKEY_free(key);
-	*rsap = rsa;
-
-	return 0;
-
-err_rsa:
-	EVP_PKEY_free(key);
-	return ret;
-}
-
-/**
- * rsa_get_pub_key() - read a public key
- *
- * @keydir:	Directory containing the key (PEM file) or key prefix (engine)
- * @name	Name of key file (will have a .crt extension)
- * @engine	Engine to use
- * @rsap	Returns RSA object, or NULL on failure
- * @return 0 if ok, -ve on error (in which case *rsap will be set to NULL)
- */
-static int rsa_get_pub_key(const char *keydir, const char *name,
-			   ENGINE *engine, RSA **rsap)
-{
-	if (engine)
-		return rsa_engine_get_pub_key(keydir, name, engine, rsap);
-	return rsa_pem_get_pub_key(keydir, name, rsap);
-}
-
-/**
- * rsa_pem_get_priv_key() - read a private key from a .key file
- *
- * @keydir:	Directory containing the key
+ * @keydir:	Directory containins the key
  * @name	Name of key file (will have a .key extension)
  * @rsap	Returns RSA object, or NULL on failure
  * @return 0 if ok, -ve on error (in which case *rsap will be set to NULL)
  */
-static int rsa_pem_get_priv_key(const char *keydir, const char *name,
-				RSA **rsap)
+static int rsa_get_priv_key(const char *keydir, const char *name, RSA **rsap)
 {
 	char path[1024];
 	RSA *rsa;
@@ -207,81 +130,6 @@ static int rsa_pem_get_priv_key(const char *keydir, const char *name,
 	return 0;
 }
 
-/**
- * rsa_engine_get_priv_key() - read a private key from given engine
- *
- * @keydir:	Key prefix
- * @name	Name of key
- * @engine	Engine to use
- * @rsap	Returns RSA object, or NULL on failure
- * @return 0 if ok, -ve on error (in which case *rsap will be set to NULL)
- */
-static int rsa_engine_get_priv_key(const char *keydir, const char *name,
-				   ENGINE *engine, RSA **rsap)
-{
-	const char *engine_id;
-	char key_id[1024];
-	EVP_PKEY *key;
-	RSA *rsa;
-	int ret;
-
-	*rsap = NULL;
-
-	engine_id = ENGINE_get_id(engine);
-
-	if (engine_id && !strcmp(engine_id, "pkcs11")) {
-		if (keydir)
-			snprintf(key_id, sizeof(key_id),
-				 "pkcs11:%s;object=%s;type=private",
-				 keydir, name);
-		else
-			snprintf(key_id, sizeof(key_id),
-				 "pkcs11:object=%s;type=private",
-				 name);
-	} else {
-		fprintf(stderr, "Engine not supported\n");
-		return -ENOTSUP;
-	}
-
-	key = ENGINE_load_private_key(engine, key_id, NULL, NULL);
-	if (!key)
-		return rsa_err("Failure loading private key from engine");
-
-	/* Convert to a RSA_style key. */
-	rsa = EVP_PKEY_get1_RSA(key);
-	if (!rsa) {
-		rsa_err("Couldn't convert to a RSA style key");
-		ret = -EINVAL;
-		goto err_rsa;
-	}
-
-	EVP_PKEY_free(key);
-	*rsap = rsa;
-
-	return 0;
-
-err_rsa:
-	EVP_PKEY_free(key);
-	return ret;
-}
-
-/**
- * rsa_get_priv_key() - read a private key
- *
- * @keydir:	Directory containing the key (PEM file) or key prefix (engine)
- * @name	Name of key
- * @engine	Engine to use for signing
- * @rsap	Returns RSA object, or NULL on failure
- * @return 0 if ok, -ve on error (in which case *rsap will be set to NULL)
- */
-static int rsa_get_priv_key(const char *keydir, const char *name,
-			    ENGINE *engine, RSA **rsap)
-{
-	if (engine)
-		return rsa_engine_get_priv_key(keydir, name, engine, rsap);
-	return rsa_pem_get_priv_key(keydir, name, rsap);
-}
-
 static int rsa_init(void)
 {
 	int ret;
@@ -300,45 +148,6 @@ static int rsa_init(void)
 	return 0;
 }
 
-static int rsa_engine_init(const char *engine_id, ENGINE **pe)
-{
-	ENGINE *e;
-	int ret;
-
-	ENGINE_load_builtin_engines();
-
-	e = ENGINE_by_id(engine_id);
-	if (!e) {
-		fprintf(stderr, "Engine isn't available\n");
-		ret = -1;
-		goto err_engine_by_id;
-	}
-
-	if (!ENGINE_init(e)) {
-		fprintf(stderr, "Couldn't initialize engine\n");
-		ret = -1;
-		goto err_engine_init;
-	}
-
-	if (!ENGINE_set_default_RSA(e)) {
-		fprintf(stderr, "Couldn't set engine as default for RSA\n");
-		ret = -1;
-		goto err_set_rsa;
-	}
-
-	*pe = e;
-
-	return 0;
-
-err_set_rsa:
-	ENGINE_finish(e);
-err_engine_init:
-	ENGINE_free(e);
-err_engine_by_id:
-	ENGINE_cleanup();
-	return ret;
-}
-
 static void rsa_remove(void)
 {
 	CRYPTO_cleanup_all_ex_data();
@@ -349,14 +158,6 @@ static void rsa_remove(void)
 	ERR_remove_state(0);
 #endif
 	EVP_cleanup();
-}
-
-static void rsa_engine_remove(ENGINE *e)
-{
-	if (e) {
-		ENGINE_finish(e);
-		ENGINE_free(e);
-	}
 }
 
 static int rsa_sign_with_key(RSA *rsa, struct checksum_algo *checksum_algo,
@@ -434,20 +235,13 @@ int rsa_sign(struct image_sign_info *info,
 	     uint8_t **sigp, uint *sig_len)
 {
 	RSA *rsa;
-	ENGINE *e = NULL;
 	int ret;
 
 	ret = rsa_init();
 	if (ret)
 		return ret;
 
-	if (info->engine_id) {
-		ret = rsa_engine_init(info->engine_id, &e);
-		if (ret)
-			goto err_engine;
-	}
-
-	ret = rsa_get_priv_key(info->keydir, info->keyname, e, &rsa);
+	ret = rsa_get_priv_key(info->keydir, info->keyname, &rsa);
 	if (ret)
 		goto err_priv;
 	ret = rsa_sign_with_key(rsa, info->checksum, region,
@@ -456,8 +250,6 @@ int rsa_sign(struct image_sign_info *info,
 		goto err_sign;
 
 	RSA_free(rsa);
-	if (info->engine_id)
-		rsa_engine_remove(e);
 	rsa_remove();
 
 	return ret;
@@ -465,9 +257,6 @@ int rsa_sign(struct image_sign_info *info,
 err_sign:
 	RSA_free(rsa);
 err_priv:
-	if (info->engine_id)
-		rsa_engine_remove(e);
-err_engine:
 	rsa_remove();
 	return ret;
 }
@@ -657,20 +446,14 @@ int rsa_add_verify_data(struct image_sign_info *info, void *keydest)
 	int ret;
 	int bits;
 	RSA *rsa;
-	ENGINE *e = NULL;
 
 	debug("%s: Getting verification data\n", __func__);
-	if (info->engine_id) {
-		ret = rsa_engine_init(info->engine_id, &e);
-		if (ret)
-			return ret;
-	}
-	ret = rsa_get_pub_key(info->keydir, info->keyname, e, &rsa);
+	ret = rsa_get_pub_key(info->keydir, info->keyname, &rsa);
 	if (ret)
-		goto err_get_pub_key;
+		return ret;
 	ret = rsa_get_params(rsa, &exponent, &n0_inv, &modulus, &r_squared);
 	if (ret)
-		goto err_get_params;
+		return ret;
 	bits = BN_num_bits(modulus);
 	parent = fdt_subnode_offset(keydest, 0, FIT_SIG_NODENAME);
 	if (parent == -FDT_ERR_NOTFOUND) {
@@ -735,12 +518,7 @@ done:
 	BN_free(modulus);
 	BN_free(r_squared);
 	if (ret)
-		ret = ret == -FDT_ERR_NOSPACE ? -ENOSPC : -EIO;
-err_get_params:
-	RSA_free(rsa);
-err_get_pub_key:
-	if (info->engine_id)
-		rsa_engine_remove(e);
+		return ret == -FDT_ERR_NOSPACE ? -ENOSPC : -EIO;
 
-	return ret;
+	return 0;
 }

@@ -67,9 +67,19 @@
 
 #define CONFIG_SUPPORT_VFAT
 
+/************************************************************
+ * DISK Partition support
+ ************************************************************/
+#define CONFIG_EFI_PARTITION
+#define CONFIG_DOS_PARTITION
+#define CONFIG_MAC_PARTITION
+#define CONFIG_ISO_PARTITION		/* Experimental */
+
+#define CONFIG_CMD_PART
 #ifdef CONFIG_SYS_COREBOOT
 #define CONFIG_CMD_CBFS
 #endif
+#define CONFIG_PARTITION_UUIDS
 
 /* x86 GPIOs are accessed through a PCI device */
 #define CONFIG_INTEL_ICH6_GPIO
@@ -125,6 +135,7 @@
 /*-----------------------------------------------------------------------
  * FLASH configuration
  */
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_CMD_SF_TEST
 #define CONFIG_SPI
 

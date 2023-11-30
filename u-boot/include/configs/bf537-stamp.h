@@ -124,6 +124,10 @@
  * SPI_MMC Settings
  */
 #define CONFIG_MMC_SPI
+#ifdef CONFIG_MMC_SPI
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+#endif
 
 /*
  * NAND Settings
@@ -181,6 +185,7 @@
 
 #if defined(CONFIG_BFIN_IDE)
 
+#define CONFIG_DOS_PARTITION	1
 /*
  * IDE/ATA stuff
  */

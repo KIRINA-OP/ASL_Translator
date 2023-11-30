@@ -219,7 +219,7 @@ static int musb_usb_probe(struct udevice *dev)
 	struct musb_host_data *mdata = &pdata->mdata;
 	struct fdt_resource mc, glue;
 	void *fdt = (void *)gd->fdt_blob;
-	int node = dev_of_offset(dev);
+	int node = dev->of_offset;
 	void __iomem *mregs;
 	int ret;
 

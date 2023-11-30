@@ -103,7 +103,7 @@ static int altera_nios2_get_count(struct udevice *dev)
 static int altera_nios2_probe(struct udevice *dev)
 {
 	const void *blob = gd->fdt_blob;
-	int node = dev_of_offset(dev);
+	int node = dev->of_offset;
 
 	gd->cpu_clk = fdtdec_get_int(blob, node,
 		"clock-frequency", 0);

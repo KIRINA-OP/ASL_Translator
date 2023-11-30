@@ -258,8 +258,13 @@
 #endif
 #endif
 
+/* High Level Configuration Options */
+#define CONFIG_BOOKE
+#define CONFIG_E500
+
 #define CONFIG_MP
 
+#define CONFIG_FSL_ELBC
 #define CONFIG_PCIE1	/* PCIE controller 1 (slot 1) */
 #define CONFIG_PCIE2	/* PCIE controller 2 (slot 2) */
 #define CONFIG_FSL_PCI_INIT	/* Use common FSL init code */
@@ -290,6 +295,8 @@
 #define CONFIG_L2_CACHE
 #define CONFIG_BTB
 
+#define CONFIG_BOARD_EARLY_INIT_F	/* Call board_pre_init */
+
 #define CONFIG_ENABLE_36BIT_PHYS
 
 #ifdef CONFIG_PHYS_64BIT
@@ -311,6 +318,7 @@
 #endif
 
 /* DDR Setup */
+#define CONFIG_SYS_FSL_DDR3
 #define CONFIG_SYS_DDR_RAW_TIMING
 #define CONFIG_DDR_SPD
 #define CONFIG_SYS_SPD_BUS_NUM 1
@@ -328,6 +336,7 @@
 #define CONFIG_SYS_DDR_SDRAM_BASE	0x00000000
 #define CONFIG_SYS_SDRAM_BASE		CONFIG_SYS_DDR_SDRAM_BASE
 
+#define CONFIG_NUM_DDR_CONTROLLERS	1
 #define CONFIG_DIMM_SLOTS_PER_CTLR	1
 
 /* Default settings for DDR3 */
@@ -695,6 +704,7 @@
 #define CONFIG_CMD_PCI
 
 #define CONFIG_PCI_SCAN_SHOW	/* show pci devices on startup */
+#define CONFIG_DOS_PARTITION
 #endif /* CONFIG_PCI */
 
 #if defined(CONFIG_TSEC_ENET)
@@ -836,9 +846,17 @@
 #define CONFIG_USB_MAX_CONTROLLER_COUNT	1
 #endif
 
+#define CONFIG_MMC
+
 #ifdef CONFIG_MMC
 #define CONFIG_FSL_ESDHC
 #define CONFIG_SYS_FSL_ESDHC_ADDR	CONFIG_SYS_MPC85xx_ESDHC_ADDR
+#define CONFIG_GENERIC_MMC
+#endif
+
+#if defined(CONFIG_MMC) || defined(CONFIG_USB_EHCI) \
+		 || defined(CONFIG_FSL_SATA)
+#define CONFIG_DOS_PARTITION
 #endif
 
 #undef CONFIG_WATCHDOG	/* watchdog disabled */

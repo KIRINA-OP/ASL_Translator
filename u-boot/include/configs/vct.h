@@ -38,6 +38,8 @@
 
 #if !defined(CONFIG_VCT_NAND) && !defined(CONFIG_VCT_ONENAND)
 #define CONFIG_VCT_NOR
+#else
+#define CONFIG_SYS_NO_FLASH
 #endif
 
 /*
@@ -95,6 +97,9 @@
 #endif
 
 #if defined(CONFIG_CMD_USB)
+#define CONFIG_DOS_PARTITION
+#define CONFIG_ISO_PARTITION
+
 #define CONFIG_SUPPORT_VFAT
 
 /*

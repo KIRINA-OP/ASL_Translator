@@ -65,12 +65,6 @@ struct msg_get_clock_rate {
 	u32 end_tag;
 };
 
-#ifdef CONFIG_ARM64
-#define DTB_DIR "broadcom/"
-#else
-#define DTB_DIR ""
-#endif
-
 /*
  * http://raspberryalphaomega.org.uk/2013/02/06/automatic-raspberry-pi-board-revision-detection-model-a-b1-and-b2/
  * http://www.raspberrypi.org/forums/viewtopic.php?f=63&t=32733
@@ -89,24 +83,24 @@ struct rpi_model {
 
 static const struct rpi_model rpi_model_unknown = {
 	"Unknown model",
-	DTB_DIR "bcm283x-rpi-other.dtb",
+	"bcm283x-rpi-other.dtb",
 	false,
 };
 
 static const struct rpi_model rpi_models_new_scheme[] = {
 	[0x4] = {
 		"2 Model B",
-		DTB_DIR "bcm2836-rpi-2-b.dtb",
+		"bcm2836-rpi-2-b.dtb",
 		true,
 	},
 	[0x8] = {
 		"3 Model B",
-		DTB_DIR "bcm2837-rpi-3-b.dtb",
+		"bcm2837-rpi-3-b.dtb",
 		true,
 	},
 	[0x9] = {
 		"Zero",
-		DTB_DIR "bcm2835-rpi-zero.dtb",
+		"bcm2835-rpi-zero.dtb",
 		false,
 	},
 };
@@ -114,87 +108,87 @@ static const struct rpi_model rpi_models_new_scheme[] = {
 static const struct rpi_model rpi_models_old_scheme[] = {
 	[0x2] = {
 		"Model B",
-		DTB_DIR "bcm2835-rpi-b.dtb",
+		"bcm2835-rpi-b.dtb",
 		true,
 	},
 	[0x3] = {
 		"Model B",
-		DTB_DIR "bcm2835-rpi-b.dtb",
+		"bcm2835-rpi-b.dtb",
 		true,
 	},
 	[0x4] = {
 		"Model B rev2",
-		DTB_DIR "bcm2835-rpi-b-rev2.dtb",
+		"bcm2835-rpi-b-rev2.dtb",
 		true,
 	},
 	[0x5] = {
 		"Model B rev2",
-		DTB_DIR "bcm2835-rpi-b-rev2.dtb",
+		"bcm2835-rpi-b-rev2.dtb",
 		true,
 	},
 	[0x6] = {
 		"Model B rev2",
-		DTB_DIR "bcm2835-rpi-b-rev2.dtb",
+		"bcm2835-rpi-b-rev2.dtb",
 		true,
 	},
 	[0x7] = {
 		"Model A",
-		DTB_DIR "bcm2835-rpi-a.dtb",
+		"bcm2835-rpi-a.dtb",
 		false,
 	},
 	[0x8] = {
 		"Model A",
-		DTB_DIR "bcm2835-rpi-a.dtb",
+		"bcm2835-rpi-a.dtb",
 		false,
 	},
 	[0x9] = {
 		"Model A",
-		DTB_DIR "bcm2835-rpi-a.dtb",
+		"bcm2835-rpi-a.dtb",
 		false,
 	},
 	[0xd] = {
 		"Model B rev2",
-		DTB_DIR "bcm2835-rpi-b-rev2.dtb",
+		"bcm2835-rpi-b-rev2.dtb",
 		true,
 	},
 	[0xe] = {
 		"Model B rev2",
-		DTB_DIR "bcm2835-rpi-b-rev2.dtb",
+		"bcm2835-rpi-b-rev2.dtb",
 		true,
 	},
 	[0xf] = {
 		"Model B rev2",
-		DTB_DIR "bcm2835-rpi-b-rev2.dtb",
+		"bcm2835-rpi-b-rev2.dtb",
 		true,
 	},
 	[0x10] = {
 		"Model B+",
-		DTB_DIR "bcm2835-rpi-b-plus.dtb",
+		"bcm2835-rpi-b-plus.dtb",
 		true,
 	},
 	[0x11] = {
 		"Compute Module",
-		DTB_DIR "bcm2835-rpi-cm.dtb",
+		"bcm2835-rpi-cm.dtb",
 		false,
 	},
 	[0x12] = {
 		"Model A+",
-		DTB_DIR "bcm2835-rpi-a-plus.dtb",
+		"bcm2835-rpi-a-plus.dtb",
 		false,
 	},
 	[0x13] = {
 		"Model B+",
-		DTB_DIR "bcm2835-rpi-b-plus.dtb",
+		"bcm2835-rpi-b-plus.dtb",
 		true,
 	},
 	[0x14] = {
 		"Compute Module",
-		DTB_DIR "bcm2835-rpi-cm.dtb",
+		"bcm2835-rpi-cm.dtb",
 		false,
 	},
 	[0x15] = {
 		"Model A+",
-		DTB_DIR "bcm2835-rpi-a-plus.dtb",
+		"bcm2835-rpi-a-plus.dtb",
 		false,
 	},
 };

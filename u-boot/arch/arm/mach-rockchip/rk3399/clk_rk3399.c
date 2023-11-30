@@ -11,10 +11,10 @@
 #include <asm/arch/clock.h>
 #include <asm/arch/cru_rk3399.h>
 
-static int rockchip_get_cruclk(struct udevice **devp)
+int rockchip_get_clk(struct udevice **devp)
 {
 	return uclass_get_device_by_driver(UCLASS_CLK,
-			DM_GET_DRIVER(clk_rk3399), devp);
+			DM_GET_DRIVER(rockchip_rk3399_pmuclk), devp);
 }
 
 void *rockchip_get_cru(void)
@@ -23,7 +23,7 @@ void *rockchip_get_cru(void)
 	struct udevice *dev;
 	int ret;
 
-	ret = rockchip_get_cruclk(&dev);
+	ret = rockchip_get_clk(&dev);
 	if (ret)
 		return ERR_PTR(ret);
 

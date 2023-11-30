@@ -24,6 +24,7 @@
 
 #define CONFIG_BOARD_NAME		"OpenRISC Generic"
 
+#define CONFIG_SYS_NO_FLASH
 #define CONFIG_SYS_MAX_FLASH_SECT	0
 
 /*

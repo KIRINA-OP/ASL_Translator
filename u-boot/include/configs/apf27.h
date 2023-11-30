@@ -22,6 +22,7 @@
 /*
  * Enable the call to miscellaneous platform dependent initialization.
  */
+#define CONFIG_SYS_NO_FLASH
 
 /*
  * SPL
@@ -240,6 +241,7 @@
  */
 #define CONFIG_MTD_DEVICE
 #define CONFIG_MTD_PARTITIONS
+#define CONFIG_DOS_PARTITION
 #define CONFIG_SUPPORT_VFAT
 
 /*
@@ -306,6 +308,9 @@
  * SD/MMC
  */
 #ifdef CONFIG_CMD_MMC
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
+#define CONFIG_MXC_MMC
 #define CONFIG_MXC_MCI_REGS_BASE	0x10014000
 #endif
 

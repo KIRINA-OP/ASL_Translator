@@ -24,6 +24,7 @@
 /*
  * Commands configuration
  */
+#define CONFIG_SYS_NO_FLASH		/* Declare no flash (NOR/SPI) */
 #define CONFIG_CMD_ENV
 #define CONFIG_CMD_PCI
 
@@ -40,6 +41,8 @@
 #define CONFIG_SF_DEFAULT_MODE		SPI_MODE_3
 
 /* Partition support */
+#define CONFIG_DOS_PARTITION
+#define CONFIG_EFI_PARTITION
 
 /* Additional FS support/configuration */
 #define CONFIG_SUPPORT_VFAT

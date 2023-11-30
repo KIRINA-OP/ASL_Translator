@@ -35,12 +35,6 @@ else
 SPL_BIN := u-boot-spl
 endif
 
-ifdef CONFIG_SPL_BUILD
-SPL_ := SPL_
-else
-SPL_ :=
-endif
-
 include $(srctree)/config.mk
 include $(srctree)/arch/$(ARCH)/Makefile
 
@@ -125,11 +119,9 @@ LDPPFLAGS += \
 	$(shell $(LD) --version | \
 	  sed -ne 's/GNU ld version \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/-DLD_MAJOR=\1 -DLD_MINOR=\2/p')
 
-MKIMAGEOUTPUT ?= /dev/null
-
 quiet_cmd_mkimage = MKIMAGE $@
 cmd_mkimage = $(objtree)/tools/mkimage $(MKIMAGEFLAGS_$(@F)) -d $< $@ \
-	$(if $(KBUILD_VERBOSE:1=), >$(MKIMAGEOUTPUT))
+	$(if $(KBUILD_VERBOSE:1=), >/dev/null)
 
 MKIMAGEFLAGS_MLO = -T omapimage -a $(CONFIG_SPL_TEXT_BASE)
 
@@ -179,8 +171,6 @@ ifeq ($(CONFIG_SYS_SOC),"at91")
 ALL-y	+= boot.bin
 endif
 
-ALL-$(CONFIG_SPL_X86_16BIT_INIT) += $(obj)/u-boot-x86-16bit-spl.bin
-
 ALL-$(CONFIG_ARCH_ZYNQ)		+= $(obj)/boot.bin
 ALL-$(CONFIG_ARCH_ZYNQMP)	+= $(obj)/boot.bin
 
@@ -193,8 +183,7 @@ quiet_cmd_copy = COPY    $@
       cmd_copy = cp $< $@
 
 ifeq ($(CONFIG_SPL_OF_CONTROL)$(CONFIG_OF_SEPARATE)$(CONFIG_SPL_OF_PLATDATA),yy)
-$(obj)/$(SPL_BIN)-dtb.bin: $(obj)/$(SPL_BIN)-nodtb.bin \
-		$(if $(CONFIG_SPL_SEPARATE_BSS),,$(obj)/$(SPL_BIN)-pad.bin) \
+$(obj)/$(SPL_BIN)-dtb.bin: $(obj)/$(SPL_BIN)-nodtb.bin $(obj)/$(SPL_BIN)-pad.bin \
 		$(obj)/$(SPL_BIN).dtb FORCE
 	$(call if_changed,cat)
 
@@ -265,14 +254,9 @@ endif
 quiet_cmd_objcopy = OBJCOPY $@
 cmd_objcopy = $(OBJCOPY) $(OBJCOPYFLAGS) $(OBJCOPYFLAGS_$(@F)) $< $@
 
-OBJCOPYFLAGS_$(SPL_BIN)-nodtb.bin = $(SPL_OBJCFLAGS) -O binary \
-		$(if $(CONFIG_SPL_X86_16BIT_INIT),-R .start16 -R .resetvec)
+OBJCOPYFLAGS_$(SPL_BIN)-nodtb.bin = $(SPL_OBJCFLAGS) -O binary
 
 $(obj)/$(SPL_BIN)-nodtb.bin: $(obj)/$(SPL_BIN) FORCE
-	$(call if_changed,objcopy)
-
-OBJCOPYFLAGS_u-boot-x86-16bit-spl.bin := -O binary -j .start16 -j .resetvec
-$(obj)/u-boot-x86-16bit-spl.bin: $(obj)/u-boot-spl FORCE
 	$(call if_changed,objcopy)
 
 LDFLAGS_$(SPL_BIN) += -T u-boot-spl.lds $(LDFLAGS_FINAL)

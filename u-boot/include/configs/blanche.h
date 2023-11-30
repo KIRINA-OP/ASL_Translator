@@ -39,7 +39,8 @@
 #undef	CONFIG_SYS_LOADS_BAUD_CHANGE
 
 /* FLASH */
-#if !defined(CONFIG_MTD_NOR_FLASH)
+/* #define CONFIG_SYS_NO_FLASH */	/* uncomment if use QSPI-FLASH */
+#if defined(CONFIG_SYS_NO_FLASH)
 #define CONFIG_SYS_TEXT_BASE	0x40000000
 #define CONFIG_SPI
 #define CONFIG_SH_QSPI
@@ -79,7 +80,7 @@
 #define CONFIG_SYS_TMU_CLK_DIV	4
 
 /* ENV setting */
-#if !defined(CONFIG_MTD_NOR_FLASH)
+#if defined(CONFIG_SYS_NO_FLASH)
 #else
 #undef  CONFIG_ENV_IS_IN_SPI_FLASH
 #undef  CONFIG_ENV_ADDR
@@ -93,6 +94,8 @@
 
 /* USB */
 #undef CONFIG_CMD_USB
+
+#define CONFIG_GENERIC_MMC
 
 /* Module stop status bits */
 /* INTC-RT */

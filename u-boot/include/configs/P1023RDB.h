@@ -23,8 +23,11 @@
 #endif
 
 /* High Level Configuration Options */
+#define CONFIG_BOOKE		/* BOOKE */
+#define CONFIG_E500		/* BOOKE e500 family */
 #define CONFIG_MP		/* support multiple processors */
 
+#define CONFIG_FSL_ELBC		/* Has Enhanced localbus controller */
 #define CONFIG_PCI_INDIRECT_BRIDGE     /* indirect PCI bridge support */
 #define CONFIG_PCIE1		/* PCIE controller 1 (slot 1) */
 #define CONFIG_PCIE2		/* PCIE controller 2 (slot 2) */
@@ -67,6 +70,7 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_CHIP_SELECTS_PER_CTRL	1
 
 #define CONFIG_DDR_SPD
+#define CONFIG_SYS_FSL_DDR3
 #define CONFIG_FSL_DDR_INTERACTIVE
 #define CONFIG_SYS_SDRAM_SIZE		512u	/* DDR is 512M */
 #define CONFIG_SYS_SPD_BUS_NUM          0
@@ -108,6 +112,7 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_SYS_FLASH_ERASE_TOUT	60000	/* Flash Erase Timeout (ms) */
 #define CONFIG_SYS_FLASH_WRITE_TOUT	500	/* Flash Write Timeout (ms) */
 
+#define CONFIG_BOARD_EARLY_INIT_F	/* call board_early_init_f function */
 #define CONFIG_BOARD_EARLY_INIT_R	/* call board_early_init_r function */
 
 #define CONFIG_SYS_INIT_RAM_LOCK
@@ -258,6 +263,7 @@ extern unsigned long get_clock_freq(void);
 #ifdef CONFIG_USB_EHCI
 #define CONFIG_EHCI_HCD_INIT_AFTER_RESET
 #define CONFIG_USB_EHCI_FSL
+#define CONFIG_DOS_PARTITION
 #endif
 #endif
 

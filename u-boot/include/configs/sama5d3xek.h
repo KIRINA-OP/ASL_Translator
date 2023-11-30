@@ -13,8 +13,13 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
+/*
+ * If has No NOR flash, please put the definition: CONFIG_SYS_NO_FLASH
+ * before the common header.
+ */
 #include "at91-sama5_common.h"
 
+#define CONFIG_BOARD_LATE_INIT
 #define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 
 /* serial console */
@@ -47,7 +52,7 @@
 #define CONFIG_SAMA5D3_LCD_BASE		0x23E00000
 
 /* NOR flash */
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 #define CONFIG_FLASH_CFI_DRIVER
 #define CONFIG_SYS_FLASH_CFI
 #define CONFIG_SYS_FLASH_PROTECTION
@@ -108,6 +113,8 @@
 /* MMC */
 
 #ifdef CONFIG_CMD_MMC
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
 #define CONFIG_GENERIC_ATMEL_MCI
 #define ATMEL_BASE_MMCI			ATMEL_BASE_MCI0
 #endif
@@ -122,6 +129,7 @@
 #define CONFIG_SYS_USB_OHCI_REGS_BASE		ATMEL_BASE_OHCI
 #define CONFIG_SYS_USB_OHCI_SLOT_NAME		"sama5d3"
 #define CONFIG_SYS_USB_OHCI_MAX_ROOT_PORTS	3
+#define CONFIG_DOS_PARTITION
 #endif
 
 /* USB device */

@@ -18,6 +18,8 @@
 
 /* Size of malloc() pool */
 #define CONFIG_SYS_MALLOC_LEN		(3 * SZ_1M)
+#define CONFIG_BOARD_EARLY_INIT_F
+#define CONFIG_BOARD_LATE_INIT
 #define CONFIG_MXC_UART
 
 /* MMC Configuration */
@@ -30,29 +32,28 @@
 /* Linux only */
 #define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 #define CONFIG_EXTRA_ENV_SETTINGS \
-	"console=ttymxc0,115200\0" \
 	"fdt_high=0xffffffff\0" \
 	"initrd_high=0xffffffff\0" \
-	"fdtfile=undefined\0" \
+	"fdt_file=undefined\0" \
 	"fdt_addr=0x83000000\0" \
-	"fdt_addr_r=0x83000000\0" \
 	"ip_dyn=yes\0" \
 	"mmcdev=0\0" \
 	"mmcrootfstype=ext4\0" \
 	"findfdt="\
 		"if test $board_name = BASIC; then " \
-			"setenv fdtfile imx6sx-udoo-neo-basic.dtb; fi; " \
+			"setenv fdt_file imx6sx-udoo-neo-basic.dtb; fi; " \
 		"if test $board_name = BASICKS; then " \
-			"setenv fdtfile imx6sx-udoo-neo-basic.dtb; fi; " \
+			"setenv fdt_file imx6sx-udoo-neo-basic.dtb; fi; " \
 		"if test $board_name = FULL; then " \
-			"setenv fdtfile imx6sx-udoo-neo-full.dtb; fi; " \
+			"setenv fdt_file imx6sx-udoo-neo-full.dtb; fi; " \
 		"if test $board_name = EXTENDED; then " \
-			"setenv fdtfile imx6sx-udoo-neo-extended.dtb; fi; " \
-		"if test $fdtfile = UNDEFINED; then " \
-			"echo WARNING: Could not determine dtb to use; fi\0" \
+			"setenv fdt_file imx6sx-udoo-neo-extended.dtb; fi; " \
+		"if test $fdt_file = UNDEFINED; then " \
+			"echo WARNING: Could not determine dtb to use; fi; \0" \
 	"kernel_addr_r=" __stringify(CONFIG_LOADADDR) "\0" \
 	"pxefile_addr_r=" __stringify(CONFIG_LOADADDR) "\0" \
-	"ramdisk_addr_r=0x84000000\0" \
+	"ramdisk_addr_r=0x83000000\0" \
+	"ramdiskaddr=0x83000000\0" \
 	"scriptaddr=" __stringify(CONFIG_LOADADDR) "\0" \
 	BOOTENV
 

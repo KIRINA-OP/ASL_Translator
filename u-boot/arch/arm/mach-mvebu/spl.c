@@ -13,6 +13,8 @@
 #include <asm/arch/cpu.h>
 #include <asm/arch/soc.h>
 
+DECLARE_GLOBAL_DATA_PTR;
+
 static u32 get_boot_device(void)
 {
 	u32 val;

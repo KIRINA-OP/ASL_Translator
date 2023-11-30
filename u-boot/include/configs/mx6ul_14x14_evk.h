@@ -23,6 +23,9 @@
 /* Size of malloc() pool */
 #define CONFIG_SYS_MALLOC_LEN		(16 * SZ_1M)
 
+#define CONFIG_BOARD_EARLY_INIT_F
+#define CONFIG_BOARD_LATE_INIT
+
 #define CONFIG_MXC_UART
 #define CONFIG_MXC_UART_BASE		UART1_BASE
 
@@ -165,7 +168,9 @@
 #define CONFIG_SYS_INIT_SP_ADDR \
 	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
 
-/* environment organization */
+/* FLASH and environment organization */
+#define CONFIG_SYS_NO_FLASH
+
 #define CONFIG_ENV_SIZE			SZ_8K
 #define CONFIG_ENV_IS_IN_MMC
 #define CONFIG_ENV_OFFSET		(8 * SZ_64K)

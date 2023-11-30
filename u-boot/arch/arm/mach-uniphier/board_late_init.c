@@ -13,7 +13,7 @@
 #include <linux/io.h>
 #include <../drivers/mtd/nand/denali.h>
 
-#include "init.h"
+#include "boot-mode/boot-device.h"
 
 static void nand_denali_wp_disable(void)
 {
@@ -62,7 +62,7 @@ int board_late_init(void)
 {
 	puts("MODE:  ");
 
-	switch (uniphier_boot_device_raw()) {
+	switch (spl_boot_device_raw()) {
 	case BOOT_DEVICE_MMC1:
 		printf("eMMC Boot\n");
 		setenv("bootmode", "emmcboot");

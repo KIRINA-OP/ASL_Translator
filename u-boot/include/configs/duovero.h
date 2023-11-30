@@ -16,9 +16,12 @@
  * High Level Configuration Options
  */
 #define CONFIG_DUOVERO
-#define CONFIG_MACH_TYPE                MACH_TYPE_DUOVERO
+#define MACH_TYPE_OMAP4_DUOVERO              4097    /* Until the next sync */
+#define CONFIG_MACH_TYPE                MACH_TYPE_OMAP4_DUOVERO
 
 #include <configs/ti_omap4_common.h>
+
+#undef CONFIG_EFI_PARTITION
 
 #undef CONFIG_SYS_EMIF_PRECALCULATED_TIMING_REGS
 #define CONFIG_SYS_AUTOMATIC_SDRAM_DETECTION

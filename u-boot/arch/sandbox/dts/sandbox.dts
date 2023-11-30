@@ -203,11 +203,6 @@
 		stringarray = "one";
 	};
 
-	spl-test4 {
-		u-boot,dm-pre-reloc;
-		compatible = "sandbox,spl-test.2";
-	};
-
 	square {
 		compatible = "demo-shape";
 		colour = "blue";

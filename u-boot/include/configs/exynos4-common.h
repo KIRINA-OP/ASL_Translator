@@ -18,10 +18,12 @@
 #define CONFIG_REVISION_TAG
 
 /* SD/MMC configuration */
+#define CONFIG_MMC_SDMA
 #define CONFIG_MMC_DEFAULT_DEV	0
 
 #undef CONFIG_CMD_ONENAND
 #undef CONFIG_CMD_MTDPARTS
+#define CONFIG_CMD_GPT
 
 /* TIZEN THOR downloader support */
 #define CONFIG_CMD_THOR_DOWNLOAD

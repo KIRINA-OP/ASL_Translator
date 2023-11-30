@@ -199,8 +199,14 @@ static int scc_init (struct eth_device *dev, bd_t * bis)
 	rxIdx = 0;
 	txIdx = 0;
 
-	if (!rtx)
-		rtx = (RTXBD *)(immr->im_cpm.cp_dpmem + CPM_SCC_BASE);
+	if (!rtx) {
+#ifdef CONFIG_SYS_ALLOC_DPRAM
+		rtx = (RTXBD *) (immr->im_cpm.cp_dpmem +
+				 dpram_alloc_align (sizeof (RTXBD), 8));
+#else
+		rtx = (RTXBD *) (immr->im_cpm.cp_dpmem + CPM_SCC_BASE);
+#endif
+	}
 
 #if (defined(PA_ENET_RXD) && defined(PA_ENET_TXD))
 	/* Configure port A pins for Txd and Rxd.

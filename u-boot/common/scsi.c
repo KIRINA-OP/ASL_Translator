@@ -559,8 +559,6 @@ int scsi_scan(int mode)
 	if (mode == 1)
 		printf("scanning bus for devices...\n");
 
-	blk_unbind_all(IF_TYPE_SCSI);
-
 	ret = uclass_get(UCLASS_SCSI, &uc);
 	if (ret)
 		return ret;

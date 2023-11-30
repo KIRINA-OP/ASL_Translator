@@ -27,8 +27,6 @@ static int fixed_regulator_ofdata_to_platdata(struct udevice *dev)
 	struct dm_regulator_uclass_platdata *uc_pdata;
 	struct fixed_regulator_platdata *dev_pdata;
 	struct gpio_desc *gpio;
-	const void *blob = gd->fdt_blob;
-	int node = dev_of_offset(dev), flags = GPIOD_IS_OUT;
 	int ret;
 
 	dev_pdata = dev_get_platdata(dev);
@@ -39,12 +37,9 @@ static int fixed_regulator_ofdata_to_platdata(struct udevice *dev)
 	/* Set type to fixed */
 	uc_pdata->type = REGULATOR_TYPE_FIXED;
 
-	if (fdtdec_get_bool(blob, node, "enable-active-high"))
-		flags |= GPIOD_IS_OUT_ACTIVE;
-
 	/* Get fixed regulator optional enable GPIO desc */
 	gpio = &dev_pdata->gpio;
-	ret = gpio_request_by_name(dev, "gpio", 0, gpio, flags);
+	ret = gpio_request_by_name(dev, "gpio", 0, gpio, GPIOD_IS_OUT);
 	if (ret) {
 		debug("Fixed regulator optional enable GPIO - not found! Error: %d\n",
 		      ret);
@@ -54,7 +49,7 @@ static int fixed_regulator_ofdata_to_platdata(struct udevice *dev)
 
 	/* Get optional ramp up delay */
 	dev_pdata->startup_delay_us = fdtdec_get_uint(gd->fdt_blob,
-						      dev_of_offset(dev),
+						      dev->of_offset,
 						      "startup-delay-us", 0);
 
 	return 0;

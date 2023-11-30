@@ -239,15 +239,11 @@ static void zynqimage_parse_initparams(struct zynq_header *zynqhdr,
 	}
 
 	err = fstat(fileno(fp), &path_stat);
-	if (err) {
-		fclose(fp);
+	if (err)
 		return;
-	}
 
-	if (!S_ISREG(path_stat.st_mode)) {
-		fclose(fp);
+	if (!S_ISREG(path_stat.st_mode))
 		return;
-	}
 
 	do {
 		r = fscanf(fp, "%x %x", &reginit.address, &reginit.data);

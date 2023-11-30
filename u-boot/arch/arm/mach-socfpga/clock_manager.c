@@ -167,9 +167,6 @@ void cm_basic_init(const struct cm_config * const cfg)
 	/* main mpu */
 	writel(cfg->mpuclk, &clock_manager_base->main_pll.mpuclk);
 
-	/* altera group mpuclk */
-	writel(cfg->altera_grp_mpuclk, &clock_manager_base->altera.mpuclk);
-
 	/* main main clock */
 	writel(cfg->mainclk, &clock_manager_base->main_pll.mainclk);
 

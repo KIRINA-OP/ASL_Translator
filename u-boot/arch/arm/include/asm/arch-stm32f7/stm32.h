@@ -32,7 +32,6 @@
 
 #define USART1_BASE		(APB2_PERIPH_BASE + 0x1000)
 #define USART6_BASE		(APB2_PERIPH_BASE + 0x1400)
-#define STM32_SYSCFG_BASE	(APB2_PERIPH_BASE + 0x3800)
 
 #define STM32_GPIOA_BASE	(AHB1_PERIPH_BASE + 0x0000)
 #define STM32_GPIOB_BASE	(AHB1_PERIPH_BASE + 0x0400)
@@ -49,7 +48,7 @@
 #define FLASH_CNTL_BASE		(AHB1_PERIPH_BASE + 0x3C00)
 
 
-#define SDRAM_FMC_BASE		(AHB3_PERIPH_BASE + 0x40000140)
+#define SDRAM_FMC_BASE		(AHB3_PERIPH_BASE + 0x4A0000140)
 
 static const u32 sect_sz_kb[CONFIG_SYS_MAX_FLASH_SECT] = {
 	[0 ... 3] =	32 * 1024,
@@ -63,7 +62,7 @@ enum clock {
 	CLOCK_APB1,
 	CLOCK_APB2
 };
-#define STM32_BUS_MASK		GENMASK(31, 16)
+#define STM32_BUS_MASK          0xFFFF0000
 
 struct stm32_rcc_regs {
 	u32 cr;		/* RCC clock control */
@@ -96,15 +95,10 @@ struct stm32_rcc_regs {
 	u32 rsv6[2];
 	u32 sscgr;	/* RCC spread spectrum clock generation */
 	u32 plli2scfgr;	/* RCC PLLI2S configuration */
-	u32 pllsaicfgr;	/* PLLSAI configuration */
-	u32 dckcfgr;	/* dedicated clocks configuration register */
+	u32 pllsaicfgr;
+	u32 dckcfgr;
 };
 #define STM32_RCC		((struct stm32_rcc_regs *)RCC_BASE)
-
-struct stm32_rcc_ext_f7_regs {
-	u32 dckcfgr2;	/* dedicated clocks configuration register */
-};
-#define STM32_RCC_EXT_F7	((struct stm32_rcc_ext_f7_regs *) (RCC_BASE + sizeof(struct stm32_rcc_regs)))
 
 struct stm32_pwr_regs {
 	u32 cr1;   /* power control register 1 */

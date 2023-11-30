@@ -9,8 +9,11 @@
 #define __CONFIG_STV0991_H
 #define CONFIG_SYS_DCACHE_OFF
 #define CONFIG_SYS_EXCEPTION_VECTORS_HIGH
+#define CONFIG_BOARD_EARLY_INIT_F
 
 #define CONFIG_SYS_CORTEX_R4
+
+#define CONFIG_SYS_NO_FLASH
 
 /* ram memory-related information */
 #define CONFIG_NR_DRAM_BANKS			1
@@ -71,7 +74,6 @@
 #ifdef CONFIG_OF_CONTROL		/* QSPI is controlled via DT */
 #define CONFIG_CQSPI_DECODER		0
 #define CONFIG_CQSPI_REF_CLK		((30/4)/2)*1000*1000
-#define CONFIG_BOUNCE_BUFFER
 
 #endif
 

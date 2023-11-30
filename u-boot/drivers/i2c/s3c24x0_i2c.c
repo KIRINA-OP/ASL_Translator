@@ -24,12 +24,6 @@
 #include <i2c.h>
 #include "s3c24x0_i2c.h"
 
-#ifndef CONFIG_SYS_I2C_S3C24X0_SLAVE
-#define SYS_I2C_S3C24X0_SLAVE_ADDR	0
-#else
-#define SYS_I2C_S3C24X0_SLAVE_ADDR	CONFIG_SYS_I2C_S3C24X0_SLAVE
-#endif
-
 DECLARE_GLOBAL_DATA_PTR;
 
 /*
@@ -93,7 +87,7 @@ static int s3c24x0_i2c_set_bus_speed(struct udevice *dev, unsigned int speed)
 	i2c_bus->clock_frequency = speed;
 
 	i2c_ch_init(i2c_bus->regs, i2c_bus->clock_frequency,
-		    SYS_I2C_S3C24X0_SLAVE_ADDR);
+		    CONFIG_SYS_I2C_S3C24X0_SLAVE);
 
 	return 0;
 }
@@ -312,7 +306,7 @@ static int s3c_i2c_ofdata_to_platdata(struct udevice *dev)
 	struct s3c24x0_i2c_bus *i2c_bus = dev_get_priv(dev);
 	int node;
 
-	node = dev_of_offset(dev);
+	node = dev->of_offset;
 
 	i2c_bus->regs = (struct s3c24x0_i2c *)dev_get_addr(dev);
 

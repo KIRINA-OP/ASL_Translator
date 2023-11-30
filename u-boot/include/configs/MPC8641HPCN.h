@@ -101,6 +101,7 @@ extern unsigned long get_board_sys_clk(unsigned long dummy);
 /*
  * DDR Setup
  */
+#define CONFIG_SYS_FSL_DDR2
 #undef CONFIG_FSL_DDR_INTERACTIVE
 #define CONFIG_SPD_EEPROM		/* Use SPD EEPROM for DDR setup */
 #define CONFIG_DDR_SPD
@@ -113,6 +114,7 @@ extern unsigned long get_board_sys_clk(unsigned long dummy);
 #define CONFIG_SYS_MAX_DDR_BAT_SIZE	0x80000000	/* BAT mapping size */
 #define CONFIG_VERY_BIG_RAM
 
+#define CONFIG_NUM_DDR_CONTROLLERS	2
 #define CONFIG_DIMM_SLOTS_PER_CTLR	2
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 
@@ -374,6 +376,7 @@ extern unsigned long get_board_sys_clk(unsigned long dummy);
 
 #undef CONFIG_PCI_SCAN_SHOW		/* show pci devices on startup */
 
+#define CONFIG_DOS_PARTITION
 #define CONFIG_SCSI_AHCI
 
 #ifdef CONFIG_SCSI_AHCI

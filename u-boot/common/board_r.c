@@ -262,6 +262,17 @@ static int initr_pci(void)
 }
 #endif
 
+#ifdef CONFIG_WINBOND_83C553
+static int initr_w83c553f(void)
+{
+	/*
+	 * Initialise the ISA bridge
+	 */
+	initialise_w83c553f();
+	return 0;
+}
+#endif
+
 static int initr_barrier(void)
 {
 #ifdef CONFIG_PPC
@@ -355,7 +366,7 @@ static int initr_manual_reloc_cmdtable(void)
 }
 #endif
 
-#if defined(CONFIG_MTD_NOR_FLASH)
+#if !defined(CONFIG_SYS_NO_FLASH)
 static int initr_flash(void)
 {
 	ulong flash_size = 0;
@@ -585,11 +596,11 @@ static int initr_kgdb(void)
 }
 #endif
 
-#if defined(CONFIG_LED_STATUS)
+#if defined(CONFIG_STATUS_LED)
 static int initr_status_led(void)
 {
-#if defined(CONFIG_LED_STATUS_BOOT)
-	status_led_set(CONFIG_LED_STATUS_BOOT, CONFIG_LED_STATUS_BLINKING);
+#if defined(STATUS_LED_BOOT)
+	status_led_set(STATUS_LED_BOOT, STATUS_LED_BLINKING);
 #else
 	status_led_init();
 #endif
@@ -615,6 +626,15 @@ static int initr_scsi(void)
 	puts("SCSI:  ");
 	scsi_init();
 
+	return 0;
+}
+#endif
+
+#if defined(CONFIG_CMD_DOC)
+static int initr_doc(void)
+{
+	puts("DOC:   ");
+	doc_init();
 	return 0;
 }
 #endif
@@ -737,7 +757,7 @@ static int run_main_loop(void)
  *
  * TODO: perhaps reset the watchdog in the initcall function after each call?
  */
-static init_fnc_t init_sequence_r[] = {
+init_fnc_t init_sequence_r[] = {
 	initr_trace,
 	initr_reloc,
 	/* TODO: could x86/PPC have this also perhaps? */
@@ -814,11 +834,14 @@ static init_fnc_t init_sequence_r[] = {
 	 */
 	initr_pci,
 #endif
+#ifdef CONFIG_WINBOND_83C553
+	initr_w83c553f,
+#endif
 #ifdef CONFIG_ARCH_EARLY_INIT_R
 	arch_early_init_r,
 #endif
 	power_init_board,
-#ifdef CONFIG_MTD_NOR_FLASH
+#ifndef CONFIG_SYS_NO_FLASH
 	initr_flash,
 #endif
 	INIT_FUNC_WATCHDOG_RESET
@@ -884,7 +907,7 @@ static init_fnc_t init_sequence_r[] = {
 #if defined(CONFIG_MICROBLAZE) || defined(CONFIG_AVR32) || defined(CONFIG_M68K)
 	timer_init,		/* initialize timer */
 #endif
-#if defined(CONFIG_LED_STATUS)
+#if defined(CONFIG_STATUS_LED)
 	initr_status_led,
 #endif
 	/* PPC has a udelay(20) here dating from 2002. Why? */
@@ -903,6 +926,10 @@ static init_fnc_t init_sequence_r[] = {
 #if defined(CONFIG_SCSI) && !defined(CONFIG_DM_SCSI)
 	INIT_FUNC_WATCHDOG_RESET
 	initr_scsi,
+#endif
+#ifdef CONFIG_CMD_DOC
+	INIT_FUNC_WATCHDOG_RESET
+	initr_doc,
 #endif
 #ifdef CONFIG_BITBANGMII
 	initr_bbmii,
@@ -947,16 +974,6 @@ static init_fnc_t init_sequence_r[] = {
 
 void board_init_r(gd_t *new_gd, ulong dest_addr)
 {
-	/*
-	 * Set up the new global data pointer. So far only x86 does this
-	 * here.
-	 * TODO(sjg@chromium.org): Consider doing this for all archs, or
-	 * dropping the new_gd parameter.
-	 */
-#if CONFIG_IS_ENABLED(X86_64)
-	arch_setup_gd(new_gd);
-#endif
-
 #ifdef CONFIG_NEEDS_MANUAL_RELOC
 	int i;
 #endif

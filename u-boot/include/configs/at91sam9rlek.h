@@ -23,6 +23,7 @@
 
 #define CONFIG_ARCH_CPU_INIT
 #define CONFIG_SKIP_LOWLEVEL_INIT
+#define CONFIG_BOARD_EARLY_INIT_F
 
 #define CONFIG_CMDLINE_TAG		1	/* enable passing of ATAGs */
 #define CONFIG_SETUP_MEMORY_TAGS	1
@@ -84,6 +85,9 @@
 #define DATAFLASH_TCSS				(0x1a << 16)
 #define DATAFLASH_TCHS				(0x1 << 24)
 
+/* NOR flash - not present */
+#define CONFIG_SYS_NO_FLASH			1
+
 /* NAND flash */
 #ifdef CONFIG_CMD_NAND
 #define CONFIG_NAND_ATMEL
@@ -102,7 +106,10 @@
 /* MMC */
 
 #ifdef CONFIG_CMD_MMC
+#define CONFIG_MMC
+#define CONFIG_GENERIC_MMC
 #define CONFIG_GENERIC_ATMEL_MCI
+#define CONFIG_DOS_PARTITION
 #endif
 
 /* Ethernet - not present */

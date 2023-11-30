@@ -46,6 +46,7 @@
 #define CONFIG_HOSTNAME		kilauea
 #include "amcc-common.h"
 
+#define CONFIG_BOARD_EARLY_INIT_F 1		/* Call board_early_init_f */
 #define CONFIG_MISC_INIT_R	1		/* Call misc_init_r	*/
 #define CONFIG_BOARD_TYPES
 #define CONFIG_BOARD_EMAC_COUNT

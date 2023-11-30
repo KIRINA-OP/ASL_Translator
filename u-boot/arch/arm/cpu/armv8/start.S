@@ -19,6 +19,8 @@
 
 .globl	_start
 _start:
+	b	reset
+
 #ifdef CONFIG_ENABLE_ARM_SOC_BOOT0_HOOK
 /*
  * Various SoCs need something special and SoC-specific up front in
@@ -26,8 +28,7 @@ _start:
  * use it here.
  */
 #include <asm/arch/boot0.h>
-#else
-	b	reset
+ARM_SOC_BOOT0_HOOK
 #endif
 
 	.align 3
@@ -85,17 +86,6 @@ save_boot_params_ret:
 	msr	cpacr_el1, x0			/* Enable FP/SIMD */
 0:
 
-	/*
-	 * Enalbe SMPEN bit for coherency.
-	 * This register is not architectural but at the moment
-	 * this bit should be set for A53/A57/A72.
-	 */
-#ifdef CONFIG_ARMV8_SET_SMPEN
-	mrs     x0, S3_1_c15_c2_1               /* cpuactlr_el1 */
-	orr     x0, x0, #0x40
-	msr     S3_1_c15_c2_1, x0
-#endif
-
 	/* Apply ARM core specific erratas */
 	bl	apply_core_errata
 
@@ -109,7 +99,7 @@ save_boot_params_ret:
 	/* Processor specific initialization */
 	bl	lowlevel_init
 
-#if defined(CONFIG_ARMV8_SPIN_TABLE) && !defined(CONFIG_SPL_BUILD)
+#if CONFIG_IS_ENABLED(ARMV8_SPIN_TABLE)
 	branch_if_master x0, x1, master_cpu
 	b	spin_table_secondary_jump
 	/* never return */
@@ -261,14 +251,14 @@ WEAK(lowlevel_init)
 	/*
 	 * All slaves will enter EL2 and optionally EL1.
 	 */
-	adr	x4, lowlevel_in_el2
-	ldr	x5, =ES_TO_AARCH64
+	adr	x3, lowlevel_in_el2
+	ldr	x4, =ES_TO_AARCH64
 	bl	armv8_switch_to_el2
 
 lowlevel_in_el2:
 #ifdef CONFIG_ARMV8_SWITCH_TO_EL1
-	adr	x4, lowlevel_in_el1
-	ldr	x5, =ES_TO_AARCH64
+	adr	x3, lowlevel_in_el1
+	ldr	x4, =ES_TO_AARCH64
 	bl	armv8_switch_to_el1
 
 lowlevel_in_el1:
