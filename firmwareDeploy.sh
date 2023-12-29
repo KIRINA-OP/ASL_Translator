@@ -45,6 +45,8 @@ if [ ! -d "./emdebian/mindb/target-rootfs/"]; then
     exit -1
 fi
 
+#copy the init file to the init.d
+
 tar -cvf target-rootfs.tar emdebian/mindb/target-rootfs/
 tar -xvf target-rootfs.tar -C /media/stephen/rootfs
 mv /media/stephen/rootfs/emdebian/mindb/target-rootfs/* /media/stephen/rootfs/
