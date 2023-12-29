@@ -1,14 +1,10 @@
 #!/bin/bash -e
-# chkconfig: 2345 20 80
-# description: Description comes here....
 
 ### BEGIN INIT INFO
-# Provides:          networking ifupdown
-# Required-Start:    mountkernfs $local_fs urandom
-# Required-Stop:     $local_fs
+# Provides:          vis main app
 # Default-Start:     S 1 2 3 4 5
 # Default-Stop:      0 6
-# Short-Description: Raise network interfaces.
+# Short-Description: vis main firmware code
 ### END INIT INFO
 
 
