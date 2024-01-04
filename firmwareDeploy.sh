@@ -7,7 +7,7 @@ copy_target_rootfs(){
     mv /media/stephen/rootfs/emdebian/mindb/target-rootfs/* /media/stephen/rootfs/
     rm -rf /media/stephen/rootfs/emdebian
     rm target-rootfs.tar
-    echo "success"
+    echo "complete"
 }
 
 #flash linux kernel, same as that one

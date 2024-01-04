@@ -1,5 +1,6 @@
 #include "main.h"
 
 void helloworld(){
-    std::cout<<"helloworld"<<std::endl;
+    while(1)
+        std::cout<<"helloworld"<<std::endl;
 }
