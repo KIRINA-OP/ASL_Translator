@@ -1,0 +1,40 @@
+#!/bin/bash -e
+
+### BEGIN INIT INFO
+# Provides:          vis main app
+# Default-Start:     S 2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: vis main firmware code
+### END INIT INFO
+
+
+#note in run level
+
+# 0 is off
+# 2 3 4 is partial mode
+# 5 full mode
+# 1 and S are used for maintainance
+# reboot
+
+. /lib/lsb/init-functions
+
+case "$1" in 
+start)
+    /usr/sbin/visapp
+    ;;
+stop)
+    if start-stop-daemon --stop --exec /usr/sbin/visapp; then
+        log_success_msg "visapp stopped"
+    else
+        log_failure_msg "visapp stop failed"
+    fi
+    ;;
+restart)
+    start-stop-daemon --stop --exec /usr/sbin/visapp
+    start-stop-daemon --start --exec /usr/sbin/visapp
+    ;;
+*)
+    echo "Usage: $0 {start|stop|restart}"
+esac
+
+exit 0 
