@@ -81,6 +81,8 @@ GRTAGS
 GSYMS
 GTAGS
 
+# boot command
+boot.scr
 *.orig
 *~
 \#*#
