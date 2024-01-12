@@ -2,6 +2,7 @@
 #define VISCONFIG_H
 #include "main.h"
 
+//TODO: config implementation can be left later 
 class visConfig{
     protected:
     LOCK* v_lock;

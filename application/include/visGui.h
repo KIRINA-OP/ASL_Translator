@@ -3,7 +3,9 @@
 #include "main.h"
 #include "visConfig.h"
 #include "visIpcMsg.h"
+#include "visTaskQueue.h"
 #include "visController.h"
+
 class visGui{
     //this class is responsible for communicating with GUI(QT) through message queue
     LOCK * g_lock;
@@ -16,5 +18,6 @@ class visGui{
 
     ~visGui();
 };
+
 
 #endif
