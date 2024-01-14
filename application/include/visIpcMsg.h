@@ -1,11 +1,11 @@
 #ifndef VISIPCMSG_H
 #define VISIPCMSG_H
-
+#include "main.h"
+#include <unistd.h>
+#include <sys/shm.h>
 class visIpcMsg{
 public:
     visIpcMsg();
-    void readMsg();
-    void writeMsg();
     ~visIpcMsg();
 };
 
@@ -13,12 +13,31 @@ class visGuiMessageQueue: public visIpcMsg{
 
 };
 
-class visFrame{
 
+struct visFrame{
+    int length;
+    int width;
+    //other pointers given by opencv
 };
+struct visShmMsg{
+    int iSignal;
+    void* chBuffer;
+};
+
 class visSharedMemory: public visIpcMsg{
     //send Frame to AI process
-    void ** buf; //frame buffer
+    //this is only for read and write
+
+
+    visShmMsg * shm_msg;
+    int shm_id;
+    int buf_length;
+    public:
+    visSharedMemory(int l);
+    int init();
+    int get_id();
+    void deliver();
+    ~visSharedMemory();    
     
 };
 
