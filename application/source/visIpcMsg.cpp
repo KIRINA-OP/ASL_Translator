@@ -42,8 +42,22 @@ int visSharedMemory::init(){
 	}
     shm_msg = (struct visShmMsg*) shm;
     shm_msg->chBuffer = new uint8_t[buf_length];
-    shm_msg->iSignal = 0;
-    return 0;
+    shm_msg->shmSig = 0;
+    return 1;
+}
+
+int visSharedMemory::deliver(uint8_t * content){
+    if(getShSig() == 1)
+        return 0; //indicating the shared memory is not yet ready
+    std::memcpy(shm_msg->chBuffer, content, buf_length);
+    shm_msg->shmSig = 1;
+    return 1;
 }
 
 
+
+visSharedMemory:: ~visSharedMemory(){
+    shmdt((void *)shm_msg);
+    delete (uint8_t*)shm_msg->chBuffer;
+    std::cout<<"terminate shared memory gate"<<std::endl;
+}    

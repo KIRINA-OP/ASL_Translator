@@ -4,9 +4,7 @@
 #include <unistd.h>
 #include <sys/shm.h>
 class visIpcMsg{
-public:
-    visIpcMsg();
-    ~visIpcMsg();
+
 };
 
 class visGuiMessageQueue: public visIpcMsg{
@@ -20,7 +18,7 @@ struct visFrame{
     //other pointers given by opencv
 };
 struct visShmMsg{
-    int iSignal;
+    int shmSig; // the signal here behave like a lock, when new image transferring, it will be set as 1, until the other side got the full image, the signal will be set back to 0
     void* chBuffer;
 };
 
@@ -35,10 +33,10 @@ class visSharedMemory: public visIpcMsg{
     public:
     visSharedMemory(int l);
     int init();
-    int get_id();
-    void deliver();
+    inline int getId(){return shm_id;};
+    int deliver(uint8_t * content);
+    inline int getShSig(){return shm_msg->shmSig;};
     ~visSharedMemory();    
-    
 };
 
 //TODO AI Integration: considering the response from the AI process, 
