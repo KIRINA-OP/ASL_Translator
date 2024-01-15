@@ -30,12 +30,14 @@ class visSharedMemory: public visIpcMsg{
     visShmMsg * shm_msg;
     int shm_id;
     int buf_length;
+    inline int getShSig(){return shm_msg->shmSig;};
+
     public:
     visSharedMemory(int l);
     int init();
     inline int getId(){return shm_id;};
     int deliver(uint8_t * content);
-    inline int getShSig(){return shm_msg->shmSig;};
+    uint8_t * receive();
     ~visSharedMemory();    
 };
 

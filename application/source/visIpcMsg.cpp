@@ -20,7 +20,6 @@ class visSharedMemory: public visIpcMsg{
 };
 */
 const std::string PIPE_NAME = "vispipe";
-const int SHARE_MEMORY_BUFFER_LEN = 1024;
 
 visSharedMemory::visSharedMemory(int l){
     buf_length = l;
@@ -29,7 +28,7 @@ visSharedMemory::visSharedMemory(int l){
 
 int visSharedMemory::init(){
     void* shm = NULL;
-    shm_id = shmget((key_t)1234, SHARE_MEMORY_BUFFER_LEN, IPC_CREAT | IPC_EXCL); //open the shared memory
+    shm_id = shmget((key_t)1234, buf_length, IPC_CREAT | IPC_EXCL); //open the shared memory
     if(shm_id == -1){
         printf("shmget err.\n");
         return 0;
@@ -52,6 +51,15 @@ int visSharedMemory::deliver(uint8_t * content){
     std::memcpy(shm_msg->chBuffer, content, buf_length);
     shm_msg->shmSig = 1;
     return 1;
+}
+
+uint8_t * visSharedMemory::receive(){
+    if(getShSig() == 0)
+        return NULL;//indicating right now there is no valid data
+    shm_msg->shmSig = 0;
+    uint8_t * ret = new uint8_t[buf_length];
+    memcpy(ret, shm_msg->chBuffer, buf_length);
+    return ret;
 }
 
 
