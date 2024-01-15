@@ -22,18 +22,18 @@ struct visShmMsg{
     void* chBuffer;
 };
 
+const int SHM_KEY_ID = 1234;
+const int BUF_LENGTH_FRAME = 1024;
 class visSharedMemory: public visIpcMsg{
     //send Frame to AI process
     //this is only for read and write
-
-
     visShmMsg * shm_msg;
     int shm_id;
     int buf_length;
     inline int getShSig(){return shm_msg->shmSig;};
-
+    int key_id;
     public:
-    visSharedMemory(int l);
+    visSharedMemory(int l, int k);
     int init();
     inline int getId(){return shm_id;};
     int deliver(uint8_t * content);

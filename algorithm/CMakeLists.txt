@@ -12,5 +12,7 @@ set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_BUILD_TYPE RelWithDebInfo)
 INCLUDE_DIRECTORIES("${PROJECT_SOURCE_DIR}/../application/include")
 
+#APIs borrowed from application
+set(SRC_LIST ${PROJECT_SOURCE_DIR}/../application/source/visIpcMsg.cpp)
 
-add_executable(visalgo  ${PROJECT_SOURCE_DIR}/main.cpp)
+add_executable(visalgo  ${PROJECT_SOURCE_DIR}/main.cpp ${SRC_LIST})

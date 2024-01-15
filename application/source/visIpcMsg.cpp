@@ -21,14 +21,16 @@ class visSharedMemory: public visIpcMsg{
 */
 const std::string PIPE_NAME = "vispipe";
 
-visSharedMemory::visSharedMemory(int l){
+visSharedMemory::visSharedMemory(int l, int k){
     buf_length = l;
+    key_id = k;
+
 }
 
 
 int visSharedMemory::init(){
     void* shm = NULL;
-    shm_id = shmget((key_t)1234, buf_length, IPC_CREAT | IPC_EXCL); //open the shared memory
+    shm_id = shmget((key_t)key_id, buf_length, IPC_CREAT | IPC_EXCL); //open the shared memory
     if(shm_id == -1){
         printf("shmget err.\n");
         return 0;
