@@ -87,11 +87,11 @@ if [ -e $algoPathDst ] && [ -e $algoPathSrc ]; then
     algo_dst_time=$(stat -c %Y $algoPathDst)
     algo_src_time=$(stat -c %Y $algoPathSrc)
     if [ $algo_src_time -gt $algo_dst_time ]; then
-        echo "copying the source application binary file to the target rootfs"
+        echo "copying the source algorithm binary file to the target rootfs"
         cp $algoPathSrc $algoPathDst
         echo "copied success"
     else
-        echo "no updates to the source application binary"
+        echo "no updates to the source algorithm binary"
     fi
 else
     if [ -e $algoPathSrc ]; then
@@ -103,6 +103,11 @@ else
         echo "firmware application doesn't exist"
     fi
 fi
+
+#copy the script
+echo "copying the start script to the target rootfs"
+cp "./start.sh" "./emdebian/mindb/target-rootfs/usr/sbin/start.sh"
+echo "copied"
 
 
 if [ -z "$(ls -A $rootfsPath)" ]; then

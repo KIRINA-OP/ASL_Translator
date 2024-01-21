@@ -29,6 +29,10 @@ struct visFrame{
 
 const int SHM_KEY_ID = 1234;
 const int BUF_LENGTH_FRAME = 1024;
+
+const std::string APP_SOCKET_PATH = "/tmp/visApp.sock";
+const std::string ALGO_SOCKET_PATH = "/tmp/visAlgo.sock";
+
 class visSocket: public visIpcMsg{
     //send Frame to AI process
     //this is only for read and write

@@ -1,26 +1,5 @@
 #include "visIpcMsg.h"
 #include <cstdint>
-#include <cstdio>
-#include <cstddef>
-
-/*struct visFrame{
-    int length;
-    int width;
-    //other pointers given by opencv
-};
-
-class visSharedMemory: public visIpcMsg{
-    //send Frame to AI process
-    //this is only for read and write
-
-    public:
-    visSharedMemory();
-    void init();
-    void deliver();
-    ~visSharedMemory();    
-    
-};
-*/
 
 visSocketApp:: visSocketApp(std::string app_path, std::string algo_path){
     app_sock_path = app_path;
@@ -79,6 +58,7 @@ visSocketAlgo:: visSocketAlgo(std::string app_path, std::string algo_path){
     app_sock_path = app_path;
     algo_sock_path = algo_path;
 }
+
 int visSocketAlgo:: init(){
     //since this class only needs to set connection with app_path, so it's okay for accept function inside here
     if((algo_sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
@@ -125,5 +105,10 @@ int visSocketAlgo:: receive(uint8_t * buf, size_t len){
         return 1;
     }
     return 0;
+}
+
+visSocketAlgo:: ~visSocketAlgo(){
+    close(app_sock);
+    close(algo_sock);
 }
 
