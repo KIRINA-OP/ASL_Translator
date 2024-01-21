@@ -2,7 +2,15 @@
 #define VISIPCMSG_H
 #include "main.h"
 #include <unistd.h>
-#include <sys/shm.h>
+
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/un.h>
+#include <sys/ipc.h>
+#include <cstddef>
+
 class visIpcMsg{
 
 };
@@ -17,28 +25,46 @@ struct visFrame{
     int width;
     //other pointers given by opencv
 };
-struct visShmMsg{
-    int shmSig; // the signal here behave like a lock, when new image transferring, it will be set as 1, until the other side got the full image, the signal will be set back to 0
-    void* chBuffer;
-};
+
 
 const int SHM_KEY_ID = 1234;
 const int BUF_LENGTH_FRAME = 1024;
-class visSharedMemory: public visIpcMsg{
+class visSocket: public visIpcMsg{
     //send Frame to AI process
     //this is only for read and write
-    visShmMsg * shm_msg;
-    int shm_id;
-    int buf_length;
-    inline int getShSig(){return shm_msg->shmSig;};
-    int key_id;
+    protected:
+    std::string app_sock_path;
+    std::string algo_sock_path;
+    struct sockaddr_un appun;
+    struct sockaddr_un algoun;
     public:
-    visSharedMemory(int l, int k);
+    virtual int init() = 0;
+    virtual int deliver(uint8_t * content, int len) = 0;
+    virtual int receive(uint8_t * buf, size_t len) = 0;
+};
+
+const int MAXLINE = 100;
+class visSocketApp: protected visSocket{
+    int app_sock;
+    public:
+    visSocketApp(std::string app_path, std::string algo_path);
     int init();
-    inline int getId(){return shm_id;};
-    int deliver(uint8_t * content);
-    uint8_t * receive();
-    ~visSharedMemory();    
+    int deliver(uint8_t * content, int len);
+    int receive(uint8_t * buf, size_t len);
+    ~visSocketApp();
+};
+
+class visSocketAlgo: protected visSocket{
+    int algo_sock;
+    socklen_t appun_len;
+    int app_sock;
+    public:
+    visSocketAlgo(std::string app_path, std::string algo_path);
+    int init(); 
+    int deliver(uint8_t * content, int len);
+    int receive(uint8_t * buf, size_t len);
+    ~visSocketAlgo();
+
 };
 
 //TODO AI Integration: considering the response from the AI process, 

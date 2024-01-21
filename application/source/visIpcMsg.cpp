@@ -1,5 +1,7 @@
 #include "visIpcMsg.h"
 #include <cstdint>
+#include <cstdio>
+#include <cstddef>
 
 /*struct visFrame{
     int length;
@@ -19,55 +21,109 @@ class visSharedMemory: public visIpcMsg{
     
 };
 */
-const std::string PIPE_NAME = "vispipe";
 
-visSharedMemory::visSharedMemory(int l, int k){
-    buf_length = l;
-    key_id = k;
-
+visSocketApp:: visSocketApp(std::string app_path, std::string algo_path){
+    app_sock_path = app_path;
+    algo_sock_path = algo_path;
 }
 
-
-int visSharedMemory::init(){
-    void* shm = NULL;
-    shm_id = shmget((key_t)key_id, buf_length, IPC_CREAT | IPC_EXCL); //open the shared memory
-    if(shm_id == -1){
-        printf("shmget err.\n");
-        return 0;
+int visSocketApp::init(){
+    if((app_sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
+        perror("app socket error");
+        return -1;
     }
-    shm = shmat(shm_id, (void*) 0, 0);
-    if(shm == (void*)-1)
-	{
-		printf("shmat err.\n");
-		return 0;
-	}
-    shm_msg = (struct visShmMsg*) shm;
-    shm_msg->chBuffer = new uint8_t[buf_length];
-    shm_msg->shmSig = 0;
-    return 1;
-}
-
-int visSharedMemory::deliver(uint8_t * content){
-    if(getShSig() == 1)
-        return 0; //indicating the shared memory is not yet ready
-    std::memcpy(shm_msg->chBuffer, content, buf_length);
-    shm_msg->shmSig = 1;
-    return 1;
-}
-
-uint8_t * visSharedMemory::receive(){
-    if(getShSig() == 0)
-        return NULL;//indicating right now there is no valid data
-    shm_msg->shmSig = 0;
-    uint8_t * ret = new uint8_t[buf_length];
-    memcpy(ret, shm_msg->chBuffer, buf_length);
-    return ret;
+    memset(&appun, 0, sizeof(appun));  
+    appun.sun_family = AF_UNIX;  
+    strcpy(appun.sun_path, app_sock_path.c_str());  
+    int len = offsetof(sockaddr_un, sun_path) + strlen(appun.sun_path);  
+    unlink(appun.sun_path);  
+    if (bind(app_sock, (struct sockaddr *)&appun, len) < 0) {  
+        perror("bind error");  
+        return -1;  
+    }
+    memset(&algoun, 0, sizeof(algoun));  
+    algoun.sun_family = AF_UNIX;  
+    strcpy(algoun.sun_path, algo_sock_path.c_str());  
+    len = offsetof(sockaddr_un, sun_path) + strlen(algoun.sun_path);  
+    if (connect(app_sock, (struct sockaddr *)&algoun, len) < 0){  
+        perror("connect error");  
+        exit(1);  
+    } 
+    return 0;  
 }
 
 
+int visSocketApp:: deliver(uint8_t * content, int len){
+    write(app_sock, content, len);
+    return 0;
+}
 
-visSharedMemory:: ~visSharedMemory(){
-    shmdt((void *)shm_msg);
-    delete (uint8_t*)shm_msg->chBuffer;
-    std::cout<<"terminate shared memory gate"<<std::endl;
-}    
+
+int visSocketApp:: receive(uint8_t * buf, size_t len){
+    int ret = read(app_sock, buf, len);
+    if(ret < 0){
+        perror("receive content error\n");
+        return -1;
+    }
+    return 0;
+}
+
+visSocketApp:: ~visSocketApp(){
+    close(app_sock);
+}
+
+
+
+
+visSocketAlgo:: visSocketAlgo(std::string app_path, std::string algo_path){
+    app_sock_path = app_path;
+    algo_sock_path = algo_path;
+}
+int visSocketAlgo:: init(){
+    //since this class only needs to set connection with app_path, so it's okay for accept function inside here
+    if((algo_sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
+        perror("algo socket error \n");
+        return -1;
+    }
+    memset(&algoun, 0, sizeof(algoun));
+    algoun.sun_family = AF_UNIX;
+    strcpy(algoun.sun_path, algo_sock_path.c_str());
+    int len = offsetof(struct sockaddr_un, sun_path) + strlen(algoun.sun_path);
+    unlink(algo_sock_path.c_str());
+    if(bind(algo_sock, (struct sockaddr*) & algoun, len) < 0){
+        perror("algo socket bind error \n ");
+        return -1;
+    }
+    printf("algo socket bound success \n");
+
+    if(listen(algo_sock, 20) < 0){
+        perror("listen error \n");
+        return -1;
+    }
+    appun_len = sizeof(appun);
+    if((app_sock = accept(algo_sock, (struct sockaddr *) & appun, &appun_len)) < 0){
+        perror("accept error \n");
+        return -1;
+    }
+    printf("accept app socket successfully \n");
+    return 0;
+}
+int visSocketAlgo:: deliver(uint8_t * content, int len){
+    write(app_sock, content, len);
+    return 0;
+}
+
+
+int visSocketAlgo:: receive(uint8_t * buf, size_t len){
+    int ret = read(app_sock, buf, len);
+    if(ret < 0){
+        perror("receive content error\n");
+        return -1;
+    }
+    if(ret == 0){
+        printf("EOF\n");
+        return 1;
+    }
+    return 0;
+}
+
