@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string>
+#include <stdint.h>
+#include <cstring>
+#include <cstdio>
+
+
 
 
 #define LOCK pthread_mutex_t 

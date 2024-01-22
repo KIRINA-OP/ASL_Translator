@@ -1,7 +1,9 @@
 #include "main.h"
+#include "visThreads.h"
+
 
 
 int main(){
-    helloworld();
+    frameTransfer();
     return 0;
 }
