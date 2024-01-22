@@ -73,6 +73,15 @@
 		compatible = "nsiway,ns2009";
 		reg = <0x48>;
 	};
+	ssd1306fb: ssd1306fb@3c {
+		compatible = "solomon, ssd1306fb-i2c";
+		reg = <0x3c>;
+		solomon, width = <128>
+		solomon, height = <64>;
+		reset-gpios = <&pio 1 0 GPIO_ACTIVE_HIGH>;
+		solomon,page-offset = <0>;
+		solomon, com-invdir;
+	};
 };
 
 &uart0 {
