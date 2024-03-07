@@ -25,9 +25,10 @@
 #define UDOUBLE uint32_t
 
 //define specific pins
+#define PB0 0 // (B-1) * 32 + 0 = 
 
 #define OLED_CS         8		
-#define OLED_RST        27	
+#define OLED_RST        PB0	
 #define OLED_DC         25	
 
 const unsigned int M_SECOND = 1000;
@@ -73,7 +74,7 @@ class visGpioControl: public visControl{
     visGpioControl();
     bool init();
     UBYTE readPin(UWORD pin);
-    void writePin(UWORD pin, UBYTE Value);
+    void writePin(UWORD pin, UBYTE val);
     ~visGpioControl();
 };
 
