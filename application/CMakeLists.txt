@@ -13,6 +13,8 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo)
 INCLUDE_DIRECTORIES("${PROJECT_SOURCE_DIR}/include")
 AUX_SOURCE_DIRECTORY(${PROJECT_SOURCE_DIR}/source SRC_LIST)
 AUX_SOURCE_DIRECTORY(${PROJECT_SOURCE_DIR}/unit_test UTEST_LIST)
+LINK_LIBRARIES("/home/stephen/ASL_Translator/application/include/gpiod/lib")
 
 add_executable(visapp  ${PROJECT_SOURCE_DIR}/main.cpp ${SRC_LIST})
 add_executable(unit_test ${SRC_LIST} ${UTEST_LIST})
+target_compile_options(visapp PRIVATE -static)
