@@ -104,6 +104,30 @@ else
     fi
 fi
 
+unitPathSrc="./application/build/bin/unit_test"
+unitPathDst="./emdebian/mindb/target-rootfs/usr/sbin/unit_test"
+if [ -e $unitPathDst ] && [ -e $unitPathSrc ]; then
+    #check the last modify time
+    unit_dst_time=$(stat -c %Y $unitPathDst)
+    unit_src_time=$(stat -c %Y $unitPathSrc)
+    if [ $unit_src_time -gt $unit_dst_time ]; then
+        echo "copying the source unit test binary file to the target rootfs"
+        cp $unitPathSrc $unitPathDst
+        echo "copied success"
+    else
+        echo "no updates to the source unit_test binary"
+    fi
+else
+    if [ -e $unitPathSrc ]; then
+        #directly copy to the destination path
+        echo "copying the source unit test binary file to the target rootfs"
+        cp $unitPathSrc $unitPathDst
+        echo "copied success"
+    else
+        echo "firmware unit test doesn't exist"
+    fi
+fi
+
 #copy the script
 echo "copying the start script to the target rootfs"
 cp "./start.sh" "./emdebian/mindb/target-rootfs/usr/sbin/start.sh"
