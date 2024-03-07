@@ -1,12 +1,40 @@
 #ifndef VISCONTROL_H
 #define VISCONTROL_H
-#include "main.h"
+
+
 #include <vector>
-#include "visGui.h"
 #include "visConfig.h"
+#include <stdio.h>
+#include <iostream>
+#include <stdlib.h>
+#include <pthread.h>
+#include <string>
+#include <stdint.h>
+#include <cstring>
+#include <cstdio>
+#include <mutex>
+#include <unistd.h>
+#include "gpiod/include/gpiod.h"
+#include <unordered_map>
+
+
+// #include <sys/mman.h>
+
+#define UBYTE   uint8_t
+#define UWORD   uint16_t
+#define UDOUBLE uint32_t
+
+//define specific pins
+
+#define OLED_CS         8		
+#define OLED_RST        27	
+#define OLED_DC         25	
+
+const unsigned int M_SECOND = 1000;
+
 class visControl{
     protected:
-    
+    std::mutex lock;
     public:
 
 };
@@ -33,26 +61,38 @@ class visCameraControl: public visControl{
 };
 
 //gpio polling by starting a pthread from thread pool
-class visDeviceControl: public visControl{
-    //gpio Control object
-    //guiMessageQueue  
-    class GPIO{};
-    std::vector<GPIO*> gpios;
-    visGui * gui; //take the controller pointer as the parameter, and add task to it
+class visGpioControl: public visControl{
+    std::string dev_name;
+
+    gpiod_chip *chip;
+    // GPIO_REGISTER * gpio_base;
+    std::unordered_map<UWORD, gpiod_line*> pin_read;
+    std::unordered_map<UWORD, gpiod_line*> pin_write;
+    bool configPin(UWORD pin, bool write);
     public:
-    //polling from outside
-    visDeviceControl(visGui* gui);
-    void readGpio();
-    void writeGpio();
-    ~visDeviceControl();
+    visGpioControl();
+    bool init();
+    UBYTE readPin(UWORD pin);
+    void writePin(UWORD pin, UBYTE Value);
+    ~visGpioControl();
 };
 
 //TODO: implement in screen control
 class visScreenControl: public visControl{
-    visGui* gui;
+    void oled_reset();
+    visGpioControl * gpio;
     public:
-    visScreenControl(visGui* gui);
+    visScreenControl(visGpioControl* gpio);
+    bool init();
+    void screenClear();
+    void paintNewImage();
+    void paintSelectImage();
+    void disPlay();
+
+    bool acquireLock();
     ~visScreenControl();
 };
+
+
 
 #endif
