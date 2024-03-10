@@ -1,11 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /****************************************************************************
  * Driver for Solarflare network controllers and boards
  * Copyright 2005-2006 Fen Systems Ltd.
  * Copyright 2006-2012 Solarflare Communications Inc.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation, incorporated herein by reference.
  */
 
 #include <linux/netdevice.h>
@@ -431,8 +428,7 @@ static int ef4_begin_loopback(struct ef4_tx_queue *tx_queue)
 
 		/* Copy the payload in, incrementing the source address to
 		 * exercise the rss vectors */
-		payload = ((struct ef4_loopback_payload *)
-			   skb_put(skb, sizeof(state->payload)));
+		payload = skb_put(skb, sizeof(state->payload));
 		memcpy(payload, &state->payload, sizeof(state->payload));
 		payload->ip.saddr = htonl(INADDR_LOOPBACK | (i << 2));
 

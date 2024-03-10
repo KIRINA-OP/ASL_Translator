@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *  ebt_arpreply
  *
@@ -68,6 +69,9 @@ static int ebt_arpreply_tg_check(const struct xt_tgchk_param *par)
 	if (e->ethproto != htons(ETH_P_ARP) ||
 	    e->invflags & EBT_IPROTO)
 		return -EINVAL;
+	if (ebt_invalid_target(info->target))
+		return -EINVAL;
+
 	return 0;
 }
 

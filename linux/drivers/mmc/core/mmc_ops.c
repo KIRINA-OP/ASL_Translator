@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  *  linux/drivers/mmc/core/mmc_ops.h
  *
  *  Copyright 2006-2007 Pierre Ossman
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or (at
- * your option) any later version.
  */
 
 #include <linux/slab.h>
@@ -19,6 +15,7 @@
 #include <linux/mmc/mmc.h>
 
 #include "core.h"
+#include "card.h"
 #include "host.h"
 #include "mmc_ops.h"
 
@@ -54,17 +51,17 @@ static const u8 tuning_blk_pattern_8bit[] = {
 	0xff, 0x77, 0x77, 0xff, 0x77, 0xbb, 0xdd, 0xee,
 };
 
-int mmc_send_status(struct mmc_card *card, u32 *status)
+int __mmc_send_status(struct mmc_card *card, u32 *status, unsigned int retries)
 {
 	int err;
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	cmd.opcode = MMC_SEND_STATUS;
 	if (!mmc_host_is_spi(card->host))
 		cmd.arg = card->rca << 16;
 	cmd.flags = MMC_RSP_SPI_R2 | MMC_RSP_R1 | MMC_CMD_AC;
 
-	err = mmc_wait_for_cmd(card->host, &cmd, MMC_CMD_RETRIES);
+	err = mmc_wait_for_cmd(card->host, &cmd, retries);
 	if (err)
 		return err;
 
@@ -76,10 +73,17 @@ int mmc_send_status(struct mmc_card *card, u32 *status)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(__mmc_send_status);
+
+int mmc_send_status(struct mmc_card *card, u32 *status)
+{
+	return __mmc_send_status(card, status, MMC_CMD_RETRIES);
+}
+EXPORT_SYMBOL_GPL(mmc_send_status);
 
 static int _mmc_select_card(struct mmc_host *host, struct mmc_card *card)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	cmd.opcode = MMC_SELECT_CARD;
 
@@ -115,7 +119,7 @@ int mmc_deselect_cards(struct mmc_host *host)
  */
 int mmc_set_dsr(struct mmc_host *host)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	cmd.opcode = MMC_SET_DSR;
 
@@ -128,7 +132,7 @@ int mmc_set_dsr(struct mmc_host *host)
 int mmc_go_idle(struct mmc_host *host)
 {
 	int err;
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	/*
 	 * Non-SPI hosts need to prevent chipselect going active during
@@ -164,7 +168,7 @@ int mmc_go_idle(struct mmc_host *host)
 
 int mmc_send_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 	int i, err = 0;
 
 	cmd.opcode = MMC_SEND_OP_COND;
@@ -176,11 +180,7 @@ int mmc_send_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 		if (err)
 			break;
 
-		/* if we're just probing, do a single pass */
-		if (ocr == 0)
-			break;
-
-		/* otherwise wait until reset completes */
+		/* wait until reset completes */
 		if (mmc_host_is_spi(host)) {
 			if (!(cmd.resp[0] & R1_SPI_IDLE))
 				break;
@@ -192,6 +192,16 @@ int mmc_send_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 		err = -ETIMEDOUT;
 
 		mmc_delay(10);
+
+		/*
+		 * According to eMMC specification v5.1 section 6.4.3, we
+		 * should issue CMD1 repeatedly in the idle state until
+		 * the eMMC is ready. Otherwise some eMMC devices seem to enter
+		 * the inactive mode after mmc_init_card() issued CMD0 when
+		 * the eMMC device is busy.
+		 */
+		if (!ocr && !mmc_host_is_spi(host))
+			cmd.arg = cmd.resp[0] | BIT(30);
 	}
 
 	if (rocr && !mmc_host_is_spi(host))
@@ -200,27 +210,9 @@ int mmc_send_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 	return err;
 }
 
-int mmc_all_send_cid(struct mmc_host *host, u32 *cid)
-{
-	int err;
-	struct mmc_command cmd = {0};
-
-	cmd.opcode = MMC_ALL_SEND_CID;
-	cmd.arg = 0;
-	cmd.flags = MMC_RSP_R2 | MMC_CMD_BCR;
-
-	err = mmc_wait_for_cmd(host, &cmd, MMC_CMD_RETRIES);
-	if (err)
-		return err;
-
-	memcpy(cid, cmd.resp, sizeof(u32) * 4);
-
-	return 0;
-}
-
 int mmc_set_relative_addr(struct mmc_card *card)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	cmd.opcode = MMC_SET_RELATIVE_ADDR;
 	cmd.arg = card->rca << 16;
@@ -233,7 +225,7 @@ static int
 mmc_send_cxd_native(struct mmc_host *host, u32 arg, u32 *cxd, int opcode)
 {
 	int err;
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	cmd.opcode = opcode;
 	cmd.arg = arg;
@@ -256,9 +248,9 @@ static int
 mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 		u32 opcode, void *buf, unsigned len)
 {
-	struct mmc_request mrq = {NULL};
-	struct mmc_command cmd = {0};
-	struct mmc_data data = {0};
+	struct mmc_request mrq = {};
+	struct mmc_command cmd = {};
+	struct mmc_data data = {};
 	struct scatterlist sg;
 
 	mrq.cmd = &cmd;
@@ -302,14 +294,10 @@ mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 	return 0;
 }
 
-int mmc_send_csd(struct mmc_card *card, u32 *csd)
+static int mmc_spi_send_csd(struct mmc_card *card, u32 *csd)
 {
 	int ret, i;
-	u32 *csd_tmp;
-
-	if (!mmc_host_is_spi(card->host))
-		return mmc_send_cxd_native(card->host, card->rca << 16,
-				csd, MMC_SEND_CSD);
+	__be32 *csd_tmp;
 
 	csd_tmp = kzalloc(16, GFP_KERNEL);
 	if (!csd_tmp)
@@ -319,7 +307,7 @@ int mmc_send_csd(struct mmc_card *card, u32 *csd)
 	if (ret)
 		goto err;
 
-	for (i = 0;i < 4;i++)
+	for (i = 0; i < 4; i++)
 		csd[i] = be32_to_cpu(csd_tmp[i]);
 
 err:
@@ -327,17 +315,19 @@ err:
 	return ret;
 }
 
-int mmc_send_cid(struct mmc_host *host, u32 *cid)
+int mmc_send_csd(struct mmc_card *card, u32 *csd)
+{
+	if (mmc_host_is_spi(card->host))
+		return mmc_spi_send_csd(card, csd);
+
+	return mmc_send_cxd_native(card->host, card->rca << 16,	csd,
+				MMC_SEND_CSD);
+}
+
+static int mmc_spi_send_cid(struct mmc_host *host, u32 *cid)
 {
 	int ret, i;
-	u32 *cid_tmp;
-
-	if (!mmc_host_is_spi(host)) {
-		if (!host->card)
-			return -EINVAL;
-		return mmc_send_cxd_native(host, host->card->rca << 16,
-				cid, MMC_SEND_CID);
-	}
+	__be32 *cid_tmp;
 
 	cid_tmp = kzalloc(16, GFP_KERNEL);
 	if (!cid_tmp)
@@ -347,12 +337,20 @@ int mmc_send_cid(struct mmc_host *host, u32 *cid)
 	if (ret)
 		goto err;
 
-	for (i = 0;i < 4;i++)
+	for (i = 0; i < 4; i++)
 		cid[i] = be32_to_cpu(cid_tmp[i]);
 
 err:
 	kfree(cid_tmp);
 	return ret;
+}
+
+int mmc_send_cid(struct mmc_host *host, u32 *cid)
+{
+	if (mmc_host_is_spi(host))
+		return mmc_spi_send_cid(host, cid);
+
+	return mmc_send_cxd_native(host, 0, cid, MMC_ALL_SEND_CID);
 }
 
 int mmc_get_ext_csd(struct mmc_card *card, u8 **new_ext_csd)
@@ -387,7 +385,7 @@ EXPORT_SYMBOL_GPL(mmc_get_ext_csd);
 
 int mmc_spi_read_ocr(struct mmc_host *host, int highcap, u32 *ocrp)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 	int err;
 
 	cmd.opcode = MMC_SPI_READ_OCR;
@@ -402,7 +400,7 @@ int mmc_spi_read_ocr(struct mmc_host *host, int highcap, u32 *ocrp)
 
 int mmc_spi_set_crc(struct mmc_host *host, int use_crc)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 	int err;
 
 	cmd.opcode = MMC_SPI_CRC_ON_OFF;
@@ -421,7 +419,7 @@ static int mmc_switch_status_error(struct mmc_host *host, u32 status)
 		if (status & R1_SPI_ILLEGAL_COMMAND)
 			return -EBADMSG;
 	} else {
-		if (status & 0xFDFFA000)
+		if (R1_STATUS(status))
 			pr_warn("%s: unexpected status %#x after switch\n",
 				mmc_hostname(host), status);
 		if (status & R1_SWITCH_ERROR)
@@ -530,7 +528,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 {
 	struct mmc_host *host = card->host;
 	int err;
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 	bool use_r1b_resp = use_busy_signal;
 	unsigned char old_timing = host->ios.timing;
 
@@ -566,7 +564,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	if (index == EXT_CSD_SANITIZE_START)
 		cmd.sanitize_busy = true;
 
-	err = mmc_wait_for_cmd(host, &cmd, MMC_CMD_RETRIES);
+	err = mmc_wait_for_cmd(host, &cmd, 0);
 	if (err)
 		goto out;
 
@@ -610,9 +608,9 @@ EXPORT_SYMBOL_GPL(mmc_switch);
 
 int mmc_send_tuning(struct mmc_host *host, u32 opcode, int *cmd_error)
 {
-	struct mmc_request mrq = {NULL};
-	struct mmc_command cmd = {0};
-	struct mmc_data data = {0};
+	struct mmc_request mrq = {};
+	struct mmc_command cmd = {};
+	struct mmc_data data = {};
 	struct scatterlist sg;
 	struct mmc_ios *ios = &host->ios;
 	const u8 *tuning_block_pattern;
@@ -679,7 +677,7 @@ EXPORT_SYMBOL_GPL(mmc_send_tuning);
 
 int mmc_abort_tuning(struct mmc_host *host, u32 opcode)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 
 	/*
 	 * eMMC specification specifies that CMD12 can be used to stop a tuning
@@ -706,9 +704,9 @@ static int
 mmc_send_bus_test(struct mmc_card *card, struct mmc_host *host, u8 opcode,
 		  u8 len)
 {
-	struct mmc_request mrq = {NULL};
-	struct mmc_command cmd = {0};
-	struct mmc_data data = {0};
+	struct mmc_request mrq = {};
+	struct mmc_command cmd = {};
+	struct mmc_data data = {};
 	struct scatterlist sg;
 	u8 *data_buf;
 	u8 *test_buf;
@@ -800,17 +798,11 @@ int mmc_bus_test(struct mmc_card *card, u8 bus_width)
 	return mmc_send_bus_test(card, card->host, MMC_BUS_TEST_R, width);
 }
 
-int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)
+static int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)
 {
-	struct mmc_command cmd = {0};
+	struct mmc_command cmd = {};
 	unsigned int opcode;
 	int err;
-
-	if (!card->ext_csd.hpi) {
-		pr_warn("%s: Card didn't support HPI command\n",
-			mmc_hostname(card->host));
-		return -EINVAL;
-	}
 
 	opcode = card->ext_csd.hpi_cmd;
 	if (opcode == MMC_STOP_TRANSMISSION)
@@ -834,7 +826,175 @@ int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)
 	return 0;
 }
 
+/**
+ *	mmc_interrupt_hpi - Issue for High priority Interrupt
+ *	@card: the MMC card associated with the HPI transfer
+ *
+ *	Issued High Priority Interrupt, and check for card status
+ *	until out-of prg-state.
+ */
+int mmc_interrupt_hpi(struct mmc_card *card)
+{
+	int err;
+	u32 status;
+	unsigned long prg_wait;
+
+	if (!card->ext_csd.hpi_en) {
+		pr_info("%s: HPI enable bit unset\n", mmc_hostname(card->host));
+		return 1;
+	}
+
+	err = mmc_send_status(card, &status);
+	if (err) {
+		pr_err("%s: Get card status fail\n", mmc_hostname(card->host));
+		goto out;
+	}
+
+	switch (R1_CURRENT_STATE(status)) {
+	case R1_STATE_IDLE:
+	case R1_STATE_READY:
+	case R1_STATE_STBY:
+	case R1_STATE_TRAN:
+		/*
+		 * In idle and transfer states, HPI is not needed and the caller
+		 * can issue the next intended command immediately
+		 */
+		goto out;
+	case R1_STATE_PRG:
+		break;
+	default:
+		/* In all other states, it's illegal to issue HPI */
+		pr_debug("%s: HPI cannot be sent. Card state=%d\n",
+			mmc_hostname(card->host), R1_CURRENT_STATE(status));
+		err = -EINVAL;
+		goto out;
+	}
+
+	err = mmc_send_hpi_cmd(card, &status);
+	if (err)
+		goto out;
+
+	prg_wait = jiffies + msecs_to_jiffies(card->ext_csd.out_of_int_time);
+	do {
+		err = mmc_send_status(card, &status);
+
+		if (!err && R1_CURRENT_STATE(status) == R1_STATE_TRAN)
+			break;
+		if (time_after(jiffies, prg_wait))
+			err = -ETIMEDOUT;
+	} while (!err);
+
+out:
+	return err;
+}
+
 int mmc_can_ext_csd(struct mmc_card *card)
 {
 	return (card && card->csd.mmca_vsn > CSD_SPEC_VER_3);
 }
+
+static int mmc_read_bkops_status(struct mmc_card *card)
+{
+	int err;
+	u8 *ext_csd;
+
+	err = mmc_get_ext_csd(card, &ext_csd);
+	if (err)
+		return err;
+
+	card->ext_csd.raw_bkops_status = ext_csd[EXT_CSD_BKOPS_STATUS];
+	card->ext_csd.raw_exception_status = ext_csd[EXT_CSD_EXP_EVENTS_STATUS];
+	kfree(ext_csd);
+	return 0;
+}
+
+/**
+ *	mmc_run_bkops - Run BKOPS for supported cards
+ *	@card: MMC card to run BKOPS for
+ *
+ *	Run background operations synchronously for cards having manual BKOPS
+ *	enabled and in case it reports urgent BKOPS level.
+*/
+void mmc_run_bkops(struct mmc_card *card)
+{
+	int err;
+
+	if (!card->ext_csd.man_bkops_en)
+		return;
+
+	err = mmc_read_bkops_status(card);
+	if (err) {
+		pr_err("%s: Failed to read bkops status: %d\n",
+		       mmc_hostname(card->host), err);
+		return;
+	}
+
+	if (!card->ext_csd.raw_bkops_status ||
+	    card->ext_csd.raw_bkops_status < EXT_CSD_BKOPS_LEVEL_2)
+		return;
+
+	mmc_retune_hold(card->host);
+
+	/*
+	 * For urgent BKOPS status, LEVEL_2 and higher, let's execute
+	 * synchronously. Future wise, we may consider to start BKOPS, for less
+	 * urgent levels by using an asynchronous background task, when idle.
+	 */
+	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
+			EXT_CSD_BKOPS_START, 1, MMC_OPS_TIMEOUT_MS);
+	if (err)
+		pr_warn("%s: Error %d starting bkops\n",
+			mmc_hostname(card->host), err);
+
+	mmc_retune_release(card->host);
+}
+EXPORT_SYMBOL(mmc_run_bkops);
+
+/*
+ * Flush the cache to the non-volatile storage.
+ */
+int mmc_flush_cache(struct mmc_card *card)
+{
+	int err = 0;
+
+	if (mmc_card_mmc(card) &&
+			(card->ext_csd.cache_size > 0) &&
+			(card->ext_csd.cache_ctrl & 1)) {
+		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
+				EXT_CSD_FLUSH_CACHE, 1, 0);
+		if (err)
+			pr_err("%s: cache flush error %d\n",
+					mmc_hostname(card->host), err);
+	}
+
+	return err;
+}
+EXPORT_SYMBOL(mmc_flush_cache);
+
+static int mmc_cmdq_switch(struct mmc_card *card, bool enable)
+{
+	u8 val = enable ? EXT_CSD_CMDQ_MODE_ENABLED : 0;
+	int err;
+
+	if (!card->ext_csd.cmdq_support)
+		return -EOPNOTSUPP;
+
+	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_CMDQ_MODE_EN,
+			 val, card->ext_csd.generic_cmd6_time);
+	if (!err)
+		card->ext_csd.cmdq_en = enable;
+
+	return err;
+}
+
+int mmc_cmdq_enable(struct mmc_card *card)
+{
+	return mmc_cmdq_switch(card, true);
+}
+EXPORT_SYMBOL_GPL(mmc_cmdq_enable);
+
+int mmc_cmdq_disable(struct mmc_card *card)
+{
+	return mmc_cmdq_switch(card, false);
+}
+EXPORT_SYMBOL_GPL(mmc_cmdq_disable);

@@ -95,6 +95,9 @@ MODULE_PARM_DESC(use_dma, "Use DMA engine to perform large data copy");
 
 static struct dentry *nt_debugfs_dir;
 
+/* Only two-ports NTB devices are supported */
+#define PIDX		NTB_DEF_PEER_IDX
+
 struct ntb_queue_entry {
 	/* ntb_queue list reference */
 	struct list_head entry;
@@ -141,7 +144,9 @@ struct ntb_transport_qp {
 	struct list_head tx_free_q;
 	spinlock_t ntb_tx_free_q_lock;
 	void __iomem *tx_mw;
-	dma_addr_t tx_mw_phys;
+	phys_addr_t tx_mw_phys;
+	size_t tx_mw_size;
+	dma_addr_t tx_mw_dma_addr;
 	unsigned int tx_index;
 	unsigned int tx_max_entry;
 	unsigned int tx_max_frame;
@@ -177,24 +182,22 @@ struct ntb_transport_qp {
 	u64 rx_err_ver;
 	u64 rx_memcpy;
 	u64 rx_async;
-	u64 dma_rx_prep_err;
 	u64 tx_bytes;
 	u64 tx_pkts;
 	u64 tx_ring_full;
 	u64 tx_err_no_buf;
 	u64 tx_memcpy;
 	u64 tx_async;
-	u64 dma_tx_prep_err;
 };
 
 struct ntb_transport_mw {
 	phys_addr_t phys_addr;
 	resource_size_t phys_size;
-	resource_size_t xlat_align;
-	resource_size_t xlat_align_size;
 	void __iomem *vbase;
 	size_t xlat_size;
 	size_t buff_size;
+	size_t alloc_size;
+	void *alloc_addr;
 	void *virt_addr;
 	dma_addr_t dma_addr;
 };
@@ -254,8 +257,6 @@ enum {
 #define QP_TO_MW(nt, qp)	((qp) % nt->mw_count)
 #define NTB_QP_DEF_NUM_ENTRIES	100
 #define NTB_LINK_DOWN_TIMEOUT	10
-#define DMA_RETRIES		20
-#define DMA_OUT_RESOURCE_TO	msecs_to_jiffies(50)
 
 static void ntb_transport_rxc_db(unsigned long data);
 static const struct ntb_ctx_ops ntb_transport_ops;
@@ -516,12 +517,6 @@ static ssize_t debugfs_read(struct file *filp, char __user *ubuf, size_t count,
 	out_offset += snprintf(buf + out_offset, out_count - out_offset,
 			       "free tx - \t%u\n",
 			       ntb_transport_tx_free_entry(qp));
-	out_offset += snprintf(buf + out_offset, out_count - out_offset,
-			       "DMA tx prep err - \t%llu\n",
-			       qp->dma_tx_prep_err);
-	out_offset += snprintf(buf + out_offset, out_count - out_offset,
-			       "DMA rx prep err - \t%llu\n",
-			       qp->dma_rx_prep_err);
 
 	out_offset += snprintf(buf + out_offset, out_count - out_offset,
 			       "\n");
@@ -623,7 +618,7 @@ static int ntb_transport_setup_qp_mw(struct ntb_transport_ctx *nt,
 	if (!mw->virt_addr)
 		return -ENOMEM;
 
-	if (qp_count % mw_count && mw_num + 1 < qp_count / mw_count)
+	if (mw_num < qp_count % mw_count)
 		num_qps_mw = qp_count / mw_count + 1;
 	else
 		num_qps_mw = qp_count / mw_count;
@@ -646,7 +641,7 @@ static int ntb_transport_setup_qp_mw(struct ntb_transport_ctx *nt,
 	 */
 	node = dev_to_node(&ndev->dev);
 	for (i = qp->rx_alloc_entry; i < qp->rx_max_entry; i++) {
-		entry = kzalloc_node(sizeof(*entry), GFP_ATOMIC, node);
+		entry = kzalloc_node(sizeof(*entry), GFP_KERNEL, node);
 		if (!entry)
 			return -ENOMEM;
 
@@ -680,12 +675,58 @@ static void ntb_free_mw(struct ntb_transport_ctx *nt, int num_mw)
 	if (!mw->virt_addr)
 		return;
 
-	ntb_mw_clear_trans(nt->ndev, num_mw);
-	dma_free_coherent(&pdev->dev, mw->buff_size,
-			  mw->virt_addr, mw->dma_addr);
+	ntb_mw_clear_trans(nt->ndev, PIDX, num_mw);
+	dma_free_coherent(&pdev->dev, mw->alloc_size,
+			  mw->alloc_addr, mw->dma_addr);
 	mw->xlat_size = 0;
 	mw->buff_size = 0;
+	mw->alloc_size = 0;
+	mw->alloc_addr = NULL;
 	mw->virt_addr = NULL;
+}
+
+static int ntb_alloc_mw_buffer(struct ntb_transport_mw *mw,
+			       struct device *dma_dev, size_t align)
+{
+	dma_addr_t dma_addr;
+	void *alloc_addr, *virt_addr;
+	int rc;
+
+	alloc_addr = dma_alloc_coherent(dma_dev, mw->alloc_size,
+					&dma_addr, GFP_KERNEL);
+	if (!alloc_addr) {
+		dev_err(dma_dev, "Unable to alloc MW buff of size %zu\n",
+			mw->alloc_size);
+		return -ENOMEM;
+	}
+	virt_addr = alloc_addr;
+
+	/*
+	 * we must ensure that the memory address allocated is BAR size
+	 * aligned in order for the XLAT register to take the value. This
+	 * is a requirement of the hardware. It is recommended to setup CMA
+	 * for BAR sizes equal or greater than 4MB.
+	 */
+	if (!IS_ALIGNED(dma_addr, align)) {
+		if (mw->alloc_size > mw->buff_size) {
+			virt_addr = PTR_ALIGN(alloc_addr, align);
+			dma_addr = ALIGN(dma_addr, align);
+		} else {
+			rc = -ENOMEM;
+			goto err;
+		}
+	}
+
+	mw->alloc_addr = alloc_addr;
+	mw->virt_addr = virt_addr;
+	mw->dma_addr = dma_addr;
+
+	return 0;
+
+err:
+	dma_free_coherent(dma_dev, mw->alloc_size, alloc_addr, dma_addr);
+
+	return rc;
 }
 
 static int ntb_set_mw(struct ntb_transport_ctx *nt, int num_mw,
@@ -694,13 +735,20 @@ static int ntb_set_mw(struct ntb_transport_ctx *nt, int num_mw,
 	struct ntb_transport_mw *mw = &nt->mw_vec[num_mw];
 	struct pci_dev *pdev = nt->ndev->pdev;
 	size_t xlat_size, buff_size;
+	resource_size_t xlat_align;
+	resource_size_t xlat_align_size;
 	int rc;
 
 	if (!size)
 		return -EINVAL;
 
-	xlat_size = round_up(size, mw->xlat_align_size);
-	buff_size = round_up(size, mw->xlat_align);
+	rc = ntb_mw_get_align(nt->ndev, PIDX, num_mw, &xlat_align,
+			      &xlat_align_size, NULL);
+	if (rc)
+		return rc;
+
+	xlat_size = round_up(size, xlat_align_size);
+	buff_size = round_up(size, xlat_align);
 
 	/* No need to re-setup */
 	if (mw->xlat_size == xlat_size)
@@ -712,32 +760,25 @@ static int ntb_set_mw(struct ntb_transport_ctx *nt, int num_mw,
 	/* Alloc memory for receiving data.  Must be aligned */
 	mw->xlat_size = xlat_size;
 	mw->buff_size = buff_size;
+	mw->alloc_size = buff_size;
 
-	mw->virt_addr = dma_alloc_coherent(&pdev->dev, buff_size,
-					   &mw->dma_addr, GFP_KERNEL);
-	if (!mw->virt_addr) {
-		mw->xlat_size = 0;
-		mw->buff_size = 0;
-		dev_err(&pdev->dev, "Unable to alloc MW buff of size %zu\n",
-			buff_size);
-		return -ENOMEM;
-	}
-
-	/*
-	 * we must ensure that the memory address allocated is BAR size
-	 * aligned in order for the XLAT register to take the value. This
-	 * is a requirement of the hardware. It is recommended to setup CMA
-	 * for BAR sizes equal or greater than 4MB.
-	 */
-	if (!IS_ALIGNED(mw->dma_addr, mw->xlat_align)) {
-		dev_err(&pdev->dev, "DMA memory %pad is not aligned\n",
-			&mw->dma_addr);
-		ntb_free_mw(nt, num_mw);
-		return -ENOMEM;
+	rc = ntb_alloc_mw_buffer(mw, &pdev->dev, xlat_align);
+	if (rc) {
+		mw->alloc_size *= 2;
+		rc = ntb_alloc_mw_buffer(mw, &pdev->dev, xlat_align);
+		if (rc) {
+			dev_err(&pdev->dev,
+				"Unable to alloc aligned MW buff\n");
+			mw->xlat_size = 0;
+			mw->buff_size = 0;
+			mw->alloc_size = 0;
+			return rc;
+		}
 	}
 
 	/* Notify HW the memory location of the receive buffer */
-	rc = ntb_mw_set_trans(nt->ndev, num_mw, mw->dma_addr, mw->xlat_size);
+	rc = ntb_mw_set_trans(nt->ndev, PIDX, num_mw, mw->dma_addr,
+			      mw->xlat_size);
 	if (rc) {
 		dev_err(&pdev->dev, "Unable to set mw%d translation", num_mw);
 		ntb_free_mw(nt, num_mw);
@@ -768,8 +809,6 @@ static void ntb_qp_link_down_reset(struct ntb_transport_qp *qp)
 	qp->tx_err_no_buf = 0;
 	qp->tx_memcpy = 0;
 	qp->tx_async = 0;
-	qp->dma_tx_prep_err = 0;
-	qp->dma_rx_prep_err = 0;
 }
 
 static void ntb_qp_link_cleanup(struct ntb_transport_qp *qp)
@@ -825,6 +864,9 @@ static void ntb_transport_link_cleanup(struct ntb_transport_ctx *nt)
 	if (!nt->link_is_up)
 		cancel_delayed_work_sync(&nt->link_work);
 
+	for (i = 0; i < nt->mw_count; i++)
+		ntb_free_mw(nt, i);
+
 	/* The scratchpad registers keep the values if the remote side
 	 * goes down, blast them now to give them a sane value the next
 	 * time they are accessed
@@ -870,17 +912,17 @@ static void ntb_transport_link_work(struct work_struct *work)
 			size = max_mw_size;
 
 		spad = MW0_SZ_HIGH + (i * 2);
-		ntb_peer_spad_write(ndev, spad, upper_32_bits(size));
+		ntb_peer_spad_write(ndev, PIDX, spad, upper_32_bits(size));
 
 		spad = MW0_SZ_LOW + (i * 2);
-		ntb_peer_spad_write(ndev, spad, lower_32_bits(size));
+		ntb_peer_spad_write(ndev, PIDX, spad, lower_32_bits(size));
 	}
 
-	ntb_peer_spad_write(ndev, NUM_MWS, nt->mw_count);
+	ntb_peer_spad_write(ndev, PIDX, NUM_MWS, nt->mw_count);
 
-	ntb_peer_spad_write(ndev, NUM_QPS, nt->qp_count);
+	ntb_peer_spad_write(ndev, PIDX, NUM_QPS, nt->qp_count);
 
-	ntb_peer_spad_write(ndev, VERSION, NTB_TRANSPORT_VERSION);
+	ntb_peer_spad_write(ndev, PIDX, VERSION, NTB_TRANSPORT_VERSION);
 
 	/* Query the remote side for its info */
 	val = ntb_spad_read(ndev, VERSION);
@@ -932,10 +974,8 @@ out1:
 		ntb_free_mw(nt, i);
 
 	/* if there's an actual failure, we should just bail */
-	if (rc < 0) {
-		ntb_link_disable(ndev);
+	if (rc < 0)
 		return;
-	}
 
 out:
 	if (ntb_link_is_up(ndev, NULL, NULL) == 1)
@@ -956,7 +996,7 @@ static void ntb_qp_link_work(struct work_struct *work)
 
 	val = ntb_spad_read(nt->ndev, QP_LINKS);
 
-	ntb_peer_spad_write(nt->ndev, QP_LINKS, val | BIT(qp->qp_num));
+	ntb_peer_spad_write(nt->ndev, PIDX, QP_LINKS, val | BIT(qp->qp_num));
 
 	/* query remote spad for qp ready bits */
 	dev_dbg_ratelimited(&pdev->dev, "Remote QP link status = %x\n", val);
@@ -1000,7 +1040,7 @@ static int ntb_transport_init_queue(struct ntb_transport_ctx *nt,
 	qp->event_handler = NULL;
 	ntb_qp_link_down_reset(qp);
 
-	if (qp_count % mw_count && mw_num + 1 < qp_count / mw_count)
+	if (mw_num < qp_count % mw_count)
 		num_qps_mw = qp_count / mw_count + 1;
 	else
 		num_qps_mw = qp_count / mw_count;
@@ -1008,9 +1048,13 @@ static int ntb_transport_init_queue(struct ntb_transport_ctx *nt,
 	mw_base = nt->mw_vec[mw_num].phys_addr;
 	mw_size = nt->mw_vec[mw_num].phys_size;
 
+	if (max_mw_size && mw_size > max_mw_size)
+		mw_size = max_mw_size;
+
 	tx_size = (unsigned int)mw_size / num_qps_mw;
 	qp_offset = tx_size * (qp_num / mw_count);
 
+	qp->tx_mw_size = tx_size;
 	qp->tx_mw = nt->mw_vec[mw_num].vbase + qp_offset;
 	if (!qp->tx_mw)
 		return -EINVAL;
@@ -1067,7 +1111,12 @@ static int ntb_transport_probe(struct ntb_client *self, struct ntb_dev *ndev)
 	int node;
 	int rc, i;
 
-	mw_count = ntb_mw_count(ndev);
+	mw_count = ntb_peer_mw_count(ndev);
+
+	if (!ndev->ops->mw_set_trans) {
+		dev_err(&ndev->dev, "Inbound MW based NTB API is required\n");
+		return -EINVAL;
+	}
 
 	if (ntb_db_is_unsafe(ndev))
 		dev_dbg(&ndev->dev,
@@ -1075,6 +1124,9 @@ static int ntb_transport_probe(struct ntb_client *self, struct ntb_dev *ndev)
 	if (ntb_spad_is_unsafe(ndev))
 		dev_dbg(&ndev->dev,
 			"scratchpad is unsafe, proceed anyway...\n");
+
+	if (ntb_peer_port_count(ndev) != NTB_DEF_PEER_CNT)
+		dev_warn(&ndev->dev, "Multi-port NTB devices unsupported\n");
 
 	node = dev_to_node(&ndev->dev);
 
@@ -1096,7 +1148,7 @@ static int ntb_transport_probe(struct ntb_client *self, struct ntb_dev *ndev)
 	max_mw_count_for_spads = (spad_count - MW0_SZ_HIGH) / 2;
 	nt->mw_count = min(mw_count, max_mw_count_for_spads);
 
-	nt->mw_vec = kzalloc_node(mw_count * sizeof(*nt->mw_vec),
+	nt->mw_vec = kcalloc_node(mw_count, sizeof(*nt->mw_vec),
 				  GFP_KERNEL, node);
 	if (!nt->mw_vec) {
 		rc = -ENOMEM;
@@ -1106,8 +1158,8 @@ static int ntb_transport_probe(struct ntb_client *self, struct ntb_dev *ndev)
 	for (i = 0; i < mw_count; i++) {
 		mw = &nt->mw_vec[i];
 
-		rc = ntb_mw_get_range(ndev, i, &mw->phys_addr, &mw->phys_size,
-				      &mw->xlat_align, &mw->xlat_align_size);
+		rc = ntb_peer_mw_get_addr(ndev, i, &mw->phys_addr,
+					  &mw->phys_size);
 		if (rc)
 			goto err1;
 
@@ -1128,8 +1180,8 @@ static int ntb_transport_probe(struct ntb_client *self, struct ntb_dev *ndev)
 	qp_count = ilog2(qp_bitmap);
 	if (max_num_clients && max_num_clients < qp_count)
 		qp_count = max_num_clients;
-	else if (mw_count < qp_count)
-		qp_count = mw_count;
+	else if (nt->mw_count < qp_count)
+		qp_count = nt->mw_count;
 
 	qp_bitmap &= BIT_ULL(qp_count) - 1;
 
@@ -1137,7 +1189,7 @@ static int ntb_transport_probe(struct ntb_client *self, struct ntb_dev *ndev)
 	nt->qp_bitmap = qp_bitmap;
 	nt->qp_bitmap_free = qp_bitmap;
 
-	nt->qp_vec = kzalloc_node(qp_count * sizeof(*nt->qp_vec),
+	nt->qp_vec = kcalloc_node(qp_count, sizeof(*nt->qp_vec),
 				  GFP_KERNEL, node);
 	if (!nt->qp_vec) {
 		rc = -ENOMEM;
@@ -1272,6 +1324,7 @@ static void ntb_rx_copy_callback(void *data,
 		case DMA_TRANS_READ_FAILED:
 		case DMA_TRANS_WRITE_FAILED:
 			entry->errors++;
+			/* fall through */
 		case DMA_TRANS_ABORTED:
 		{
 			struct ntb_transport_qp *qp = entry->qp;
@@ -1317,7 +1370,6 @@ static int ntb_async_rx_submit(struct ntb_queue_entry *entry, void *offset)
 	struct dmaengine_unmap_data *unmap;
 	dma_cookie_t cookie;
 	void *buf = entry->buf;
-	int retries = 0;
 
 	len = entry->len;
 	device = chan->device;
@@ -1346,22 +1398,11 @@ static int ntb_async_rx_submit(struct ntb_queue_entry *entry, void *offset)
 
 	unmap->from_cnt = 1;
 
-	for (retries = 0; retries < DMA_RETRIES; retries++) {
-		txd = device->device_prep_dma_memcpy(chan,
-						     unmap->addr[1],
-						     unmap->addr[0], len,
-						     DMA_PREP_INTERRUPT);
-		if (txd)
-			break;
-
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(DMA_OUT_RESOURCE_TO);
-	}
-
-	if (!txd) {
-		qp->dma_rx_prep_err++;
+	txd = device->device_prep_dma_memcpy(chan, unmap->addr[1],
+					     unmap->addr[0], len,
+					     DMA_PREP_INTERRUPT);
+	if (!txd)
 		goto err_get_unmap;
-	}
 
 	txd->callback_result = ntb_rx_copy_callback;
 	txd->callback_param = entry;
@@ -1539,6 +1580,7 @@ static void ntb_tx_copy_callback(void *data,
 		case DMA_TRANS_READ_FAILED:
 		case DMA_TRANS_WRITE_FAILED:
 			entry->errors++;
+			/* fall through */
 		case DMA_TRANS_ABORTED:
 		{
 			void __iomem *offset =
@@ -1606,10 +1648,9 @@ static int ntb_async_tx_submit(struct ntb_transport_qp *qp,
 	struct dmaengine_unmap_data *unmap;
 	dma_addr_t dest;
 	dma_cookie_t cookie;
-	int retries = 0;
 
 	device = chan->device;
-	dest = qp->tx_mw_phys + qp->tx_max_frame * entry->tx_index;
+	dest = qp->tx_mw_dma_addr + qp->tx_max_frame * entry->tx_index;
 	buff_off = (size_t)buf & ~PAGE_MASK;
 	dest_off = (size_t)dest & ~PAGE_MASK;
 
@@ -1628,21 +1669,10 @@ static int ntb_async_tx_submit(struct ntb_transport_qp *qp,
 
 	unmap->to_cnt = 1;
 
-	for (retries = 0; retries < DMA_RETRIES; retries++) {
-		txd = device->device_prep_dma_memcpy(chan, dest,
-						     unmap->addr[0], len,
-						     DMA_PREP_INTERRUPT);
-		if (txd)
-			break;
-
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(DMA_OUT_RESOURCE_TO);
-	}
-
-	if (!txd) {
-		qp->dma_tx_prep_err++;
+	txd = device->device_prep_dma_memcpy(chan, dest, unmap->addr[0], len,
+					     DMA_PREP_INTERRUPT);
+	if (!txd)
 		goto err_get_unmap;
-	}
 
 	txd->callback_result = ntb_tx_copy_callback;
 	txd->callback_param = entry;
@@ -1839,6 +1869,18 @@ ntb_transport_create_queue(void *data, struct device *client_dev,
 		qp->rx_dma_chan = NULL;
 	}
 
+	if (qp->tx_dma_chan) {
+		qp->tx_mw_dma_addr =
+			dma_map_resource(qp->tx_dma_chan->device->dev,
+					 qp->tx_mw_phys, qp->tx_mw_size,
+					 DMA_FROM_DEVICE, 0);
+		if (dma_mapping_error(qp->tx_dma_chan->device->dev,
+				      qp->tx_mw_dma_addr)) {
+			qp->tx_mw_dma_addr = 0;
+			goto err1;
+		}
+	}
+
 	dev_dbg(&pdev->dev, "Using %s memcpy for TX\n",
 		qp->tx_dma_chan ? "DMA" : "CPU");
 
@@ -1846,7 +1888,7 @@ ntb_transport_create_queue(void *data, struct device *client_dev,
 		qp->rx_dma_chan ? "DMA" : "CPU");
 
 	for (i = 0; i < NTB_QP_DEF_NUM_ENTRIES; i++) {
-		entry = kzalloc_node(sizeof(*entry), GFP_ATOMIC, node);
+		entry = kzalloc_node(sizeof(*entry), GFP_KERNEL, node);
 		if (!entry)
 			goto err1;
 
@@ -1857,7 +1899,7 @@ ntb_transport_create_queue(void *data, struct device *client_dev,
 	qp->rx_alloc_entry = NTB_QP_DEF_NUM_ENTRIES;
 
 	for (i = 0; i < qp->tx_max_entry; i++) {
-		entry = kzalloc_node(sizeof(*entry), GFP_ATOMIC, node);
+		entry = kzalloc_node(sizeof(*entry), GFP_KERNEL, node);
 		if (!entry)
 			goto err2;
 
@@ -1880,6 +1922,10 @@ err1:
 	qp->rx_alloc_entry = 0;
 	while ((entry = ntb_list_rm(&qp->ntb_rx_q_lock, &qp->rx_free_q)))
 		kfree(entry);
+	if (qp->tx_mw_dma_addr)
+		dma_unmap_resource(qp->tx_dma_chan->device->dev,
+				   qp->tx_mw_dma_addr, qp->tx_mw_size,
+				   DMA_FROM_DEVICE, 0);
 	if (qp->tx_dma_chan)
 		dma_release_channel(qp->tx_dma_chan);
 	if (qp->rx_dma_chan)
@@ -1921,6 +1967,11 @@ void ntb_transport_free_queue(struct ntb_transport_qp *qp)
 		 */
 		dma_sync_wait(chan, qp->last_cookie);
 		dmaengine_terminate_all(chan);
+
+		dma_unmap_resource(chan->device->dev,
+				   qp->tx_mw_dma_addr, qp->tx_mw_size,
+				   DMA_FROM_DEVICE, 0);
+
 		dma_release_channel(chan);
 	}
 
@@ -2127,8 +2178,7 @@ void ntb_transport_link_down(struct ntb_transport_qp *qp)
 
 	val = ntb_spad_read(qp->ndev, QP_LINKS);
 
-	ntb_peer_spad_write(qp->ndev, QP_LINKS,
-			    val & ~BIT(qp->qp_num));
+	ntb_peer_spad_write(qp->ndev, PIDX, QP_LINKS, val & ~BIT(qp->qp_num));
 
 	if (qp->link_is_up)
 		ntb_send_link_down(qp);

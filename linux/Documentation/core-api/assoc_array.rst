@@ -10,7 +10,10 @@ properties:
 
 1. Objects are opaque pointers.  The implementation does not care where they
    point (if anywhere) or what they point to (if anything).
-.. note:: Pointers to objects _must_ be zero in the least significant bit.
+
+   .. note::
+
+      Pointers to objects _must_ be zero in the least significant bit.
 
 2. Objects do not need to contain linkage blocks for use by the array.  This
    permits an object to be located in multiple arrays simultaneously.
@@ -31,7 +34,7 @@ properties:
 8. The array can iterated over.  The objects will not necessarily come out in
    key order.
 
-9. The array can be iterated over whilst it is being modified, provided the
+9. The array can be iterated over while it is being modified, provided the
    RCU readlock is being held by the iterator.  Note, however, under these
    circumstances, some objects may be seen more than once.  If this is a
    problem, the iterator should lock against modification.  Objects will not
@@ -39,7 +42,7 @@ properties:
 
 10. Objects in the array can be looked up by means of their index key.
 
-11. Objects can be looked up whilst the array is being modified, provided the
+11. Objects can be looked up while the array is being modified, provided the
     RCU readlock is being held by the thread doing the look up.
 
 The implementation uses a tree of 16-pointer nodes internally that are indexed
@@ -270,7 +273,7 @@ The function will return ``0`` if successful and ``-ENOMEM`` if there wasn't
 enough memory.
 
 It is possible for other threads to iterate over or search the array under
-the RCU read lock whilst this function is in progress.  The caller should
+the RCU read lock while this function is in progress.  The caller should
 lock exclusively against other modifiers of the array.
 
 

@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* (C) 1999-2001 Paul `Rusty' Russell
  * (C) 2002-2004 Netfilter Core Team <coreteam@netfilter.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/types.h>
@@ -45,7 +42,7 @@ static enum ip_defrag_users nf_ct_defrag_user(unsigned int hooknum,
 {
 	u16 zone_id = NF_CT_DEFAULT_ZONE_ID;
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
-	if (skb->nfct) {
+	if (skb_nfct(skb)) {
 		enum ip_conntrack_info ctinfo;
 		const struct nf_conn *ct = nf_ct_get(skb, &ctinfo);
 
@@ -75,9 +72,11 @@ static unsigned int ipv4_conntrack_defrag(void *priv,
 #if !IS_ENABLED(CONFIG_NF_NAT)
 	/* Previously seen (loopback)?  Ignore.  Do this before
 	   fragment check. */
-	if (skb->nfct && !nf_ct_is_template((struct nf_conn *)skb->nfct))
+	if (skb_nfct(skb) && !nf_ct_is_template((struct nf_conn *)skb_nfct(skb)))
 		return NF_ACCEPT;
 #endif
+	if (skb->_nfct == IP_CT_UNTRACKED)
+		return NF_ACCEPT;
 #endif
 	/* Gather fragments. */
 	if (ip_is_fragment(ip_hdr(skb))) {
@@ -90,7 +89,7 @@ static unsigned int ipv4_conntrack_defrag(void *priv,
 	return NF_ACCEPT;
 }
 
-static struct nf_hook_ops ipv4_defrag_ops[] = {
+static const struct nf_hook_ops ipv4_defrag_ops[] = {
 	{
 		.hook		= ipv4_conntrack_defrag,
 		.pf		= NFPROTO_IPV4,

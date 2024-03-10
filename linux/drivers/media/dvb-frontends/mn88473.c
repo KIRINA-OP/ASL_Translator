@@ -1,17 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Panasonic MN88473 DVB-T/T2/C demodulator driver
  *
  * Copyright (C) 2014 Antti Palosaari <crope@iki.fi>
- *
- *    This program is free software; you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation; either version 2 of the License, or
- *    (at your option) any later version.
- *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
  */
 
 #include "mn88473_priv.h"
@@ -222,6 +213,15 @@ static int mn88473_set_frontend(struct dvb_frontend *fe)
 	ret = regmap_write(dev->regmap[0], 0xd7, 0x04);
 	if (ret)
 		goto err;
+
+	/* PLP */
+	if (c->delivery_system == SYS_DVBT2) {
+		ret = regmap_write(dev->regmap[2], 0x36,
+				(c->stream_id == NO_STREAM_ID_FILTER) ? 0 :
+				c->stream_id );
+		if (ret)
+			goto err;
+	}
 
 	/* Reset FSM */
 	ret = regmap_write(dev->regmap[2], 0xf8, 0x9f);
@@ -592,7 +592,8 @@ static const struct dvb_frontend_ops mn88473_ops = {
 			FE_CAN_GUARD_INTERVAL_AUTO     |
 			FE_CAN_HIERARCHY_AUTO          |
 			FE_CAN_MUTE_TS                 |
-			FE_CAN_2G_MODULATION
+			FE_CAN_2G_MODULATION           |
+			FE_CAN_MULTISTREAM
 	},
 
 	.get_tune_settings = mn88473_get_tune_settings,
@@ -754,7 +755,7 @@ MODULE_DEVICE_TABLE(i2c, mn88473_id_table);
 
 static struct i2c_driver mn88473_driver = {
 	.driver = {
-		.name	             = "mn88473",
+		.name		     = "mn88473",
 		.suppress_bind_attrs = true,
 	},
 	.probe		= mn88473_probe,

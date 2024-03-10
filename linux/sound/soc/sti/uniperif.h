@@ -1,8 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (C) STMicroelectronics SA 2015
  * Authors: Arnaud Pouliquen <arnaud.pouliquen@st.com>
  *          for STMicroelectronics.
- * License terms:  GNU General Public License (GPL), version 2
  */
 
 #ifndef __SND_ST_AUD_UNIPERIF_H
@@ -1299,6 +1299,7 @@ struct uniperif {
 	int ver; /* IP version, used by register access macros */
 	struct regmap_field *clk_sel;
 	struct regmap_field *valid_sel;
+	spinlock_t irq_lock; /* use to prevent race condition with IRQ */
 
 	/* capabilities */
 	const struct snd_pcm_hardware *hw;

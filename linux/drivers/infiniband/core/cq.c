@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015 HGST, a Western Digital Company.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
  */
 #include <linux/module.h>
 #include <linux/err.h>
@@ -17,6 +9,7 @@
 
 /* # of WCs to poll for with a single call to ib_poll_cq */
 #define IB_POLL_BATCH			16
+#define IB_POLL_BATCH_DIRECT		8
 
 /* # of WCs to iterate over before yielding */
 #define IB_POLL_BUDGET_IRQ		256
@@ -25,13 +18,20 @@
 #define IB_POLL_FLAGS \
 	(IB_CQ_NEXT_COMP | IB_CQ_REPORT_MISSED_EVENTS)
 
-static int __ib_process_cq(struct ib_cq *cq, int budget)
+static int __ib_process_cq(struct ib_cq *cq, int budget, struct ib_wc *wcs,
+			   int batch)
 {
 	int i, n, completed = 0;
 
-	while ((n = ib_poll_cq(cq, IB_POLL_BATCH, cq->wc)) > 0) {
+	/*
+	 * budget might be (-1) if the caller does not
+	 * want to bound this call, thus we need unsigned
+	 * minimum here.
+	 */
+	while ((n = ib_poll_cq(cq, min_t(u32, batch,
+					 budget - completed), wcs)) > 0) {
 		for (i = 0; i < n; i++) {
-			struct ib_wc *wc = &cq->wc[i];
+			struct ib_wc *wc = &wcs[i];
 
 			if (wc->wr_cqe)
 				wc->wr_cqe->done(cq, wc);
@@ -41,8 +41,7 @@ static int __ib_process_cq(struct ib_cq *cq, int budget)
 
 		completed += n;
 
-		if (n != IB_POLL_BATCH ||
-		    (budget != -1 && completed >= budget))
+		if (n != batch || (budget != -1 && completed >= budget))
 			break;
 	}
 
@@ -54,18 +53,20 @@ static int __ib_process_cq(struct ib_cq *cq, int budget)
  * @cq:		CQ to process
  * @budget:	number of CQEs to poll for
  *
- * This function is used to process all outstanding CQ entries on a
- * %IB_POLL_DIRECT CQ.  It does not offload CQ processing to a different
- * context and does not ask for completion interrupts from the HCA.
+ * This function is used to process all outstanding CQ entries.
+ * It does not offload CQ processing to a different context and does
+ * not ask for completion interrupts from the HCA.
+ * Using direct processing on CQ with non IB_POLL_DIRECT type may trigger
+ * concurrent processing.
  *
- * Note: for compatibility reasons -1 can be passed in %budget for unlimited
- * polling.  Do not use this feature in new code, it will be removed soon.
+ * Note: do not pass -1 as %budget unless it is guaranteed that the number
+ * of completions that will be processed is small.
  */
 int ib_process_cq_direct(struct ib_cq *cq, int budget)
 {
-	WARN_ON_ONCE(cq->poll_ctx != IB_POLL_DIRECT);
+	struct ib_wc wcs[IB_POLL_BATCH_DIRECT];
 
-	return __ib_process_cq(cq, budget);
+	return __ib_process_cq(cq, budget, wcs, IB_POLL_BATCH_DIRECT);
 }
 EXPORT_SYMBOL(ib_process_cq_direct);
 
@@ -79,7 +80,7 @@ static int ib_poll_handler(struct irq_poll *iop, int budget)
 	struct ib_cq *cq = container_of(iop, struct ib_cq, iop);
 	int completed;
 
-	completed = __ib_process_cq(cq, budget);
+	completed = __ib_process_cq(cq, budget, cq->wc, IB_POLL_BATCH);
 	if (completed < budget) {
 		irq_poll_complete(&cq->iop);
 		if (ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0)
@@ -99,32 +100,37 @@ static void ib_cq_poll_work(struct work_struct *work)
 	struct ib_cq *cq = container_of(work, struct ib_cq, work);
 	int completed;
 
-	completed = __ib_process_cq(cq, IB_POLL_BUDGET_WORKQUEUE);
+	completed = __ib_process_cq(cq, IB_POLL_BUDGET_WORKQUEUE, cq->wc,
+				    IB_POLL_BATCH);
 	if (completed >= IB_POLL_BUDGET_WORKQUEUE ||
 	    ib_req_notify_cq(cq, IB_POLL_FLAGS) > 0)
-		queue_work(ib_comp_wq, &cq->work);
+		queue_work(cq->comp_wq, &cq->work);
 }
 
 static void ib_cq_completion_workqueue(struct ib_cq *cq, void *private)
 {
-	queue_work(ib_comp_wq, &cq->work);
+	queue_work(cq->comp_wq, &cq->work);
 }
 
 /**
- * ib_alloc_cq - allocate a completion queue
+ * __ib_alloc_cq - allocate a completion queue
  * @dev:		device to allocate the CQ for
  * @private:		driver private data, accessible from cq->cq_context
  * @nr_cqe:		number of CQEs to allocate
  * @comp_vector:	HCA completion vectors for this CQ
  * @poll_ctx:		context to poll the CQ from.
+ * @caller:		module owner name.
+ * @udata:		Valid user data or NULL for kernel object
  *
  * This is the proper interface to allocate a CQ for in-kernel users. A
  * CQ allocated with this interface will automatically be polled from the
- * specified context.  The ULP needs must use wr->wr_cqe instead of wr->wr_id
+ * specified context. The ULP must use wr->wr_cqe instead of wr->wr_id
  * to use this CQ abstraction.
  */
-struct ib_cq *ib_alloc_cq(struct ib_device *dev, void *private,
-		int nr_cqe, int comp_vector, enum ib_poll_context poll_ctx)
+struct ib_cq *__ib_alloc_cq_user(struct ib_device *dev, void *private,
+				 int nr_cqe, int comp_vector,
+				 enum ib_poll_context poll_ctx,
+				 const char *caller, struct ib_udata *udata)
 {
 	struct ib_cq_init_attr cq_attr = {
 		.cqe		= nr_cqe,
@@ -133,7 +139,7 @@ struct ib_cq *ib_alloc_cq(struct ib_device *dev, void *private,
 	struct ib_cq *cq;
 	int ret = -ENOMEM;
 
-	cq = dev->create_cq(dev, &cq_attr, NULL, NULL);
+	cq = dev->ops.create_cq(dev, &cq_attr, NULL);
 	if (IS_ERR(cq))
 		return cq;
 
@@ -148,6 +154,10 @@ struct ib_cq *ib_alloc_cq(struct ib_device *dev, void *private,
 	if (!cq->wc)
 		goto out_destroy_cq;
 
+	cq->res.type = RDMA_RESTRACK_CQ;
+	rdma_restrack_set_task(&cq->res, caller);
+	rdma_restrack_kadd(&cq->res);
+
 	switch (cq->poll_ctx) {
 	case IB_POLL_DIRECT:
 		cq->comp_handler = ib_cq_completion_direct;
@@ -159,9 +169,12 @@ struct ib_cq *ib_alloc_cq(struct ib_device *dev, void *private,
 		ib_req_notify_cq(cq, IB_CQ_NEXT_COMP);
 		break;
 	case IB_POLL_WORKQUEUE:
+	case IB_POLL_UNBOUND_WORKQUEUE:
 		cq->comp_handler = ib_cq_completion_workqueue;
 		INIT_WORK(&cq->work, ib_cq_poll_work);
 		ib_req_notify_cq(cq, IB_CQ_NEXT_COMP);
+		cq->comp_wq = (cq->poll_ctx == IB_POLL_WORKQUEUE) ?
+				ib_comp_wq : ib_comp_unbound_wq;
 		break;
 	default:
 		ret = -EINVAL;
@@ -172,17 +185,19 @@ struct ib_cq *ib_alloc_cq(struct ib_device *dev, void *private,
 
 out_free_wc:
 	kfree(cq->wc);
+	rdma_restrack_del(&cq->res);
 out_destroy_cq:
-	cq->device->destroy_cq(cq);
+	cq->device->ops.destroy_cq(cq, udata);
 	return ERR_PTR(ret);
 }
-EXPORT_SYMBOL(ib_alloc_cq);
+EXPORT_SYMBOL(__ib_alloc_cq_user);
 
 /**
  * ib_free_cq - free a completion queue
  * @cq:		completion queue to free.
+ * @udata:	User data or NULL for kernel object
  */
-void ib_free_cq(struct ib_cq *cq)
+void ib_free_cq_user(struct ib_cq *cq, struct ib_udata *udata)
 {
 	int ret;
 
@@ -196,14 +211,16 @@ void ib_free_cq(struct ib_cq *cq)
 		irq_poll_disable(&cq->iop);
 		break;
 	case IB_POLL_WORKQUEUE:
-		flush_work(&cq->work);
+	case IB_POLL_UNBOUND_WORKQUEUE:
+		cancel_work_sync(&cq->work);
 		break;
 	default:
 		WARN_ON_ONCE(1);
 	}
 
 	kfree(cq->wc);
-	ret = cq->device->destroy_cq(cq);
+	rdma_restrack_del(&cq->res);
+	ret = cq->device->ops.destroy_cq(cq, udata);
 	WARN_ON_ONCE(ret);
 }
-EXPORT_SYMBOL(ib_free_cq);
+EXPORT_SYMBOL(ib_free_cq_user);

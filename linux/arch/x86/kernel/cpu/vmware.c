@@ -30,7 +30,6 @@
 #include <asm/hypervisor.h>
 #include <asm/timer.h>
 #include <asm/apic.h>
-#include <asm/timer.h>
 
 #undef pr_fmt
 #define pr_fmt(fmt)	"vmware: " fmt
@@ -78,7 +77,7 @@ static __init int setup_vmw_sched_clock(char *s)
 }
 early_param("no-vmw-sched-clock", setup_vmw_sched_clock);
 
-static unsigned long long vmware_sched_clock(void)
+static unsigned long long notrace vmware_sched_clock(void)
 {
 	unsigned long long ns;
 
@@ -98,14 +97,14 @@ static void __init vmware_sched_clock_setup(void)
 	d->cyc2ns_offset = mul_u64_u32_shr(tsc_now, d->cyc2ns_mul,
 					   d->cyc2ns_shift);
 
-	pv_time_ops.sched_clock = vmware_sched_clock;
+	pv_ops.time.sched_clock = vmware_sched_clock;
 	pr_info("using sched offset of %llu ns\n", d->cyc2ns_offset);
 }
 
 static void __init vmware_paravirt_ops_setup(void)
 {
 	pv_info.name = "VMware hypervisor";
-	pv_cpu_ops.io_delay = paravirt_nop;
+	pv_ops.cpu.io_delay = paravirt_nop;
 
 	if (vmware_tsc_khz && vmw_sched_clock)
 		vmware_sched_clock_setup();
@@ -113,6 +112,24 @@ static void __init vmware_paravirt_ops_setup(void)
 #else
 #define vmware_paravirt_ops_setup() do {} while (0)
 #endif
+
+/*
+ * VMware hypervisor takes care of exporting a reliable TSC to the guest.
+ * Still, due to timing difference when running on virtual cpus, the TSC can
+ * be marked as unstable in some cases. For example, the TSC sync check at
+ * bootup can fail due to a marginal offset between vcpus' TSCs (though the
+ * TSCs do not drift from each other).  Also, the ACPI PM timer clocksource
+ * is not suitable as a watchdog when running on a hypervisor because the
+ * kernel may miss a wrap of the counter if the vcpu is descheduled for a
+ * long time. To skip these checks at runtime we set these capability bits,
+ * so that the kernel could just trust the hypervisor with providing a
+ * reliable virtual TSC that is suitable for timekeeping.
+ */
+static void __init vmware_set_capabilities(void)
+{
+	setup_force_cpu_cap(X86_FEATURE_CONSTANT_TSC);
+	setup_force_cpu_cap(X86_FEATURE_TSC_RELIABLE);
+}
 
 static void __init vmware_platform_setup(void)
 {
@@ -140,7 +157,7 @@ static void __init vmware_platform_setup(void)
 
 #ifdef CONFIG_X86_LOCAL_APIC
 		/* Skip lapic calibration since we know the bus frequency. */
-		lapic_timer_frequency = ecx / HZ;
+		lapic_timer_period = ecx / HZ;
 		pr_info("Host bus clock speed read from hypervisor : %u Hz\n",
 			ecx);
 #endif
@@ -153,6 +170,8 @@ static void __init vmware_platform_setup(void)
 #ifdef CONFIG_X86_IO_APIC
 	no_timer_check = 1;
 #endif
+
+	vmware_set_capabilities();
 }
 
 /*
@@ -177,24 +196,6 @@ static uint32_t __init vmware_platform(void)
 	return 0;
 }
 
-/*
- * VMware hypervisor takes care of exporting a reliable TSC to the guest.
- * Still, due to timing difference when running on virtual cpus, the TSC can
- * be marked as unstable in some cases. For example, the TSC sync check at
- * bootup can fail due to a marginal offset between vcpus' TSCs (though the
- * TSCs do not drift from each other).  Also, the ACPI PM timer clocksource
- * is not suitable as a watchdog when running on a hypervisor because the
- * kernel may miss a wrap of the counter if the vcpu is descheduled for a
- * long time. To skip these checks at runtime we set these capability bits,
- * so that the kernel could just trust the hypervisor with providing a
- * reliable virtual TSC that is suitable for timekeeping.
- */
-static void vmware_set_cpu_features(struct cpuinfo_x86 *c)
-{
-	set_cpu_cap(c, X86_FEATURE_CONSTANT_TSC);
-	set_cpu_cap(c, X86_FEATURE_TSC_RELIABLE);
-}
-
 /* Checks if hypervisor supports x2apic without VT-D interrupt remapping. */
 static bool __init vmware_legacy_x2apic_available(void)
 {
@@ -204,11 +205,10 @@ static bool __init vmware_legacy_x2apic_available(void)
 	       (eax & (1 << VMWARE_PORT_CMD_LEGACY_X2APIC)) != 0;
 }
 
-const __refconst struct hypervisor_x86 x86_hyper_vmware = {
+const __initconst struct hypervisor_x86 x86_hyper_vmware = {
 	.name			= "VMware",
 	.detect			= vmware_platform,
-	.set_cpu_features	= vmware_set_cpu_features,
-	.init_platform		= vmware_platform_setup,
-	.x2apic_available	= vmware_legacy_x2apic_available,
+	.type			= X86_HYPER_VMWARE,
+	.init.init_platform	= vmware_platform_setup,
+	.init.x2apic_available	= vmware_legacy_x2apic_available,
 };
-EXPORT_SYMBOL(x86_hyper_vmware);

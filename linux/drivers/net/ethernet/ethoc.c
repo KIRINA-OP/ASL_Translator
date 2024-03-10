@@ -1,12 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * linux/drivers/net/ethernet/ethoc.c
  *
  * Copyright (C) 2007-2008 Avionic Design Development GmbH
  * Copyright (C) 2008-2009 Avionic Design GmbH
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  *
  * Written by Thierry Reding <thierry.reding@avionic-design.de>
  */
@@ -180,8 +177,6 @@ MODULE_PARM_DESC(buffer_size, "DMA buffer allocation size");
  * struct ethoc - driver-private device structure
  * @iobase:	pointer to I/O memory region
  * @membase:	pointer to buffer memory region
- * @dma_alloc:	dma allocated buffer size
- * @io_region_size:	I/O memory region size
  * @num_bd:	number of buffer descriptors
  * @num_tx:	number of send buffers
  * @cur_tx:	last send buffer written
@@ -199,8 +194,6 @@ MODULE_PARM_DESC(buffer_size, "DMA buffer allocation size");
 struct ethoc {
 	void __iomem *iobase;
 	void __iomem *membase;
-	int dma_alloc;
-	resource_size_t io_region_size;
 	bool big_endian;
 
 	unsigned int num_bd;
@@ -618,7 +611,7 @@ static int ethoc_poll(struct napi_struct *napi, int budget)
 	tx_work_done = ethoc_tx(priv->netdev, budget);
 
 	if (rx_work_done < budget && tx_work_done < budget) {
-		napi_complete(napi);
+		napi_complete_done(napi, rx_work_done);
 		ethoc_enable_irq(priv, INT_MASK_TX | INT_MASK_RX);
 	}
 
@@ -725,10 +718,7 @@ static int ethoc_mdio_probe(struct net_device *dev)
 		return err;
 	}
 
-	phy->advertising &= ~(ADVERTISED_1000baseT_Full |
-			      ADVERTISED_1000baseT_Half);
-	phy->supported &= ~(SUPPORTED_1000baseT_Full |
-			    SUPPORTED_1000baseT_Half);
+	phy_set_max_speed(phy, SPEED_100);
 
 	return 0;
 }
@@ -742,6 +732,8 @@ static int ethoc_open(struct net_device *dev)
 			dev->name, dev);
 	if (ret)
 		return ret;
+
+	napi_enable(&priv->napi);
 
 	ethoc_init_ring(priv, dev->mem_start);
 	ethoc_reset(priv);
@@ -758,7 +750,6 @@ static int ethoc_open(struct net_device *dev)
 	priv->old_duplex = -1;
 
 	phy_start(dev->phydev);
-	napi_enable(&priv->napi);
 
 	if (netif_msg_ifup(priv)) {
 		dev_info(&dev->dev, "I/O: %08lx Memory: %08lx-%08lx\n",
@@ -999,7 +990,7 @@ static int ethoc_set_ringparam(struct net_device *dev,
 	return 0;
 }
 
-const struct ethtool_ops ethoc_ethtool_ops = {
+static const struct ethtool_ops ethoc_ethtool_ops = {
 	.get_regs_len = ethoc_get_regs_len,
 	.get_regs = ethoc_get_regs,
 	.nway_reset = phy_ethtool_nway_reset,
@@ -1035,7 +1026,6 @@ static int ethoc_probe(struct platform_device *pdev)
 	struct ethoc *priv = NULL;
 	int num_bd;
 	int ret = 0;
-	bool random_mac = false;
 	struct ethoc_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	u32 eth_clkfreq = pdata ? pdata->eth_clkfreq : 0;
 
@@ -1096,8 +1086,6 @@ static int ethoc_probe(struct platform_device *pdev)
 	/* setup driver-private data */
 	priv = netdev_priv(netdev);
 	priv->netdev = netdev;
-	priv->dma_alloc = 0;
-	priv->io_region_size = resource_size(mmio);
 
 	priv->iobase = devm_ioremap_nocache(&pdev->dev, netdev->base_addr,
 			resource_size(mmio));
@@ -1127,7 +1115,6 @@ static int ethoc_probe(struct platform_device *pdev)
 			goto free;
 		}
 		netdev->mem_end = netdev->mem_start + buffer_size;
-		priv->dma_alloc = buffer_size;
 	}
 
 	priv->big_endian = pdata ? pdata->big_endian :
@@ -1148,7 +1135,8 @@ static int ethoc_probe(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "ethoc: num_tx: %d num_rx: %d\n",
 		priv->num_tx, priv->num_rx);
 
-	priv->vma = devm_kzalloc(&pdev->dev, num_bd*sizeof(void *), GFP_KERNEL);
+	priv->vma = devm_kcalloc(&pdev->dev, num_bd, sizeof(void *),
+				 GFP_KERNEL);
 	if (!priv->vma) {
 		ret = -ENOMEM;
 		goto free;
@@ -1156,14 +1144,14 @@ static int ethoc_probe(struct platform_device *pdev)
 
 	/* Allow the platform setup code to pass in a MAC address. */
 	if (pdata) {
-		memcpy(netdev->dev_addr, pdata->hwaddr, IFHWADDRLEN);
+		ether_addr_copy(netdev->dev_addr, pdata->hwaddr);
 		priv->phy_id = pdata->phy_id;
 	} else {
 		const void *mac;
 
 		mac = of_get_mac_address(pdev->dev.of_node);
-		if (mac)
-			memcpy(netdev->dev_addr, mac, IFHWADDRLEN);
+		if (!IS_ERR(mac))
+			ether_addr_copy(netdev->dev_addr, mac);
 		priv->phy_id = -1;
 	}
 
@@ -1176,15 +1164,10 @@ static int ethoc_probe(struct platform_device *pdev)
 	/* Check the MAC again for validity, if it still isn't choose and
 	 * program a random one.
 	 */
-	if (!is_valid_ether_addr(netdev->dev_addr)) {
-		eth_random_addr(netdev->dev_addr);
-		random_mac = true;
-	}
+	if (!is_valid_ether_addr(netdev->dev_addr))
+		eth_hw_addr_random(netdev);
 
 	ethoc_do_set_mac_address(netdev);
-
-	if (random_mac)
-		netdev->addr_assign_type = NET_ADDR_RANDOM;
 
 	/* Allow the platform setup code to adjust MII management bus clock. */
 	if (!eth_clkfreq) {
@@ -1258,8 +1241,7 @@ error:
 	mdiobus_unregister(priv->mdio);
 	mdiobus_free(priv->mdio);
 free2:
-	if (priv->clk)
-		clk_disable_unprepare(priv->clk);
+	clk_disable_unprepare(priv->clk);
 free:
 	free_netdev(netdev);
 out:
@@ -1283,8 +1265,7 @@ static int ethoc_remove(struct platform_device *pdev)
 			mdiobus_unregister(priv->mdio);
 			mdiobus_free(priv->mdio);
 		}
-		if (priv->clk)
-			clk_disable_unprepare(priv->clk);
+		clk_disable_unprepare(priv->clk);
 		unregister_netdev(netdev);
 		free_netdev(netdev);
 	}

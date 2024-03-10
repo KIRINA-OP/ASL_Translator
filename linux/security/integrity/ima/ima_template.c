@@ -1,13 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2013 Politecnico di Torino, Italy
  *                    TORSEC group -- http://security.polito.it
  *
  * Author: Roberto Sassu <roberto.sassu@polito.it>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, version 2 of the
- * License.
  *
  * File: ima_template.c
  *      Helpers to manage template descriptors.
@@ -19,17 +15,21 @@
 #include "ima.h"
 #include "ima_template_lib.h"
 
+enum header_fields { HDR_PCR, HDR_DIGEST, HDR_TEMPLATE_NAME,
+		     HDR_TEMPLATE_DATA, HDR__LAST };
+
 static struct ima_template_desc builtin_templates[] = {
 	{.name = IMA_TEMPLATE_IMA_NAME, .fmt = IMA_TEMPLATE_IMA_FMT},
 	{.name = "ima-ng", .fmt = "d-ng|n-ng"},
 	{.name = "ima-sig", .fmt = "d-ng|n-ng|sig"},
+	{.name = "ima-buf", .fmt = "d-ng|n-ng|buf"},
 	{.name = "", .fmt = ""},	/* placeholder for a custom format */
 };
 
 static LIST_HEAD(defined_templates);
 static DEFINE_SPINLOCK(template_list);
 
-static struct ima_template_field supported_fields[] = {
+static const struct ima_template_field supported_fields[] = {
 	{.field_id = "d", .field_init = ima_eventdigest_init,
 	 .field_show = ima_show_template_digest},
 	{.field_id = "n", .field_init = ima_eventname_init,
@@ -40,14 +40,18 @@ static struct ima_template_field supported_fields[] = {
 	 .field_show = ima_show_template_string},
 	{.field_id = "sig", .field_init = ima_eventsig_init,
 	 .field_show = ima_show_template_sig},
+	{.field_id = "buf", .field_init = ima_eventbuf_init,
+	 .field_show = ima_show_template_buf},
 };
-#define MAX_TEMPLATE_NAME_LEN 15
+
+/*
+ * Used when restoring measurements carried over from a kexec. 'd' and 'n' don't
+ * need to be accounted for since they shouldn't be defined in the same template
+ * description as 'd-ng' and 'n-ng' respectively.
+ */
+#define MAX_TEMPLATE_NAME_LEN sizeof("d-ng|n-ng|sig|buf")
 
 static struct ima_template_desc *ima_template;
-static struct ima_template_desc *lookup_template_desc(const char *name);
-static int template_desc_init_fields(const char *template_fmt,
-				     struct ima_template_field ***fields,
-				     int *num_fields);
 
 static int __init ima_template_setup(char *str)
 {
@@ -105,7 +109,7 @@ static int __init ima_template_fmt_setup(char *str)
 }
 __setup("ima_template_fmt=", ima_template_fmt_setup);
 
-static struct ima_template_desc *lookup_template_desc(const char *name)
+struct ima_template_desc *lookup_template_desc(const char *name)
 {
 	struct ima_template_desc *template_desc;
 	int found = 0;
@@ -122,7 +126,8 @@ static struct ima_template_desc *lookup_template_desc(const char *name)
 	return found ? template_desc : NULL;
 }
 
-static struct ima_template_field *lookup_template_field(const char *field_id)
+static const struct ima_template_field *
+lookup_template_field(const char *field_id)
 {
 	int i;
 
@@ -149,12 +154,12 @@ static int template_fmt_size(const char *template_fmt)
 	return j + 1;
 }
 
-static int template_desc_init_fields(const char *template_fmt,
-				     struct ima_template_field ***fields,
-				     int *num_fields)
+int template_desc_init_fields(const char *template_fmt,
+			      const struct ima_template_field ***fields,
+			      int *num_fields)
 {
 	const char *template_fmt_ptr;
-	struct ima_template_field *found_fields[IMA_TEMPLATE_NUM_FIELDS_MAX];
+	const struct ima_template_field *found_fields[IMA_TEMPLATE_NUM_FIELDS_MAX];
 	int template_num_fields;
 	int i, len;
 
@@ -274,13 +279,6 @@ static int ima_restore_template_data(struct ima_template_desc *template_desc,
 				     int template_data_size,
 				     struct ima_template_entry **entry)
 {
-	struct binary_field_data {
-		u32 len;
-		u8 data[0];
-	} __packed;
-
-	struct binary_field_data *field_data;
-	int offset = 0;
 	int ret = 0;
 	int i;
 
@@ -290,30 +288,19 @@ static int ima_restore_template_data(struct ima_template_desc *template_desc,
 	if (!*entry)
 		return -ENOMEM;
 
+	ret = ima_parse_buf(template_data, template_data + template_data_size,
+			    NULL, template_desc->num_fields,
+			    (*entry)->template_data, NULL, NULL,
+			    ENFORCE_FIELDS | ENFORCE_BUFEND, "template data");
+	if (ret < 0) {
+		kfree(*entry);
+		return ret;
+	}
+
 	(*entry)->template_desc = template_desc;
 	for (i = 0; i < template_desc->num_fields; i++) {
-		field_data = template_data + offset;
-
-		/* Each field of the template data is prefixed with a length. */
-		if (offset > (template_data_size - sizeof(*field_data))) {
-			pr_err("Restoring the template field failed\n");
-			ret = -EINVAL;
-			break;
-		}
-		offset += sizeof(*field_data);
-
-		if (ima_canonical_fmt)
-			field_data->len = le32_to_cpu(field_data->len);
-
-		if (offset > (template_data_size - field_data->len)) {
-			pr_err("Restoring the template field data failed\n");
-			ret = -EINVAL;
-			break;
-		}
-		offset += field_data->len;
-
-		(*entry)->template_data[i].len = field_data->len;
-		(*entry)->template_data_len += sizeof(field_data->len);
+		struct ima_field_data *field_data = &(*entry)->template_data[i];
+		u8 *data = field_data->data;
 
 		(*entry)->template_data[i].data =
 			kzalloc(field_data->len + 1, GFP_KERNEL);
@@ -321,8 +308,8 @@ static int ima_restore_template_data(struct ima_template_desc *template_desc,
 			ret = -ENOMEM;
 			break;
 		}
-		memcpy((*entry)->template_data[i].data, field_data->data,
-			field_data->len);
+		memcpy((*entry)->template_data[i].data, data, field_data->len);
+		(*entry)->template_data_len += sizeof(field_data->len);
 		(*entry)->template_data_len += field_data->len;
 	}
 
@@ -337,27 +324,19 @@ static int ima_restore_template_data(struct ima_template_desc *template_desc,
 /* Restore the serialized binary measurement list without extending PCRs. */
 int ima_restore_measurement_list(loff_t size, void *buf)
 {
-	struct binary_hdr_v1 {
-		u32 pcr;
-		u8 digest[TPM_DIGEST_SIZE];
-		u32 template_name_len;
-		char template_name[0];
-	} __packed;
 	char template_name[MAX_TEMPLATE_NAME_LEN];
 
-	struct binary_data_v1 {
-		u32 template_data_size;
-		char template_data[0];
-	} __packed;
-
 	struct ima_kexec_hdr *khdr = buf;
-	struct binary_hdr_v1 *hdr_v1;
-	struct binary_data_v1 *data_v1;
+	struct ima_field_data hdr[HDR__LAST] = {
+		[HDR_PCR] = {.len = sizeof(u32)},
+		[HDR_DIGEST] = {.len = TPM_DIGEST_SIZE},
+	};
 
 	void *bufp = buf + sizeof(*khdr);
 	void *bufendp;
 	struct ima_template_entry *entry;
 	struct ima_template_desc *template_desc;
+	DECLARE_BITMAP(hdr_mask, HDR__LAST);
 	unsigned long count = 0;
 	int ret = 0;
 
@@ -380,6 +359,10 @@ int ima_restore_measurement_list(loff_t size, void *buf)
 		return -EINVAL;
 	}
 
+	bitmap_zero(hdr_mask, HDR__LAST);
+	bitmap_set(hdr_mask, HDR_PCR, 1);
+	bitmap_set(hdr_mask, HDR_DIGEST, 1);
+
 	/*
 	 * ima kexec buffer prefix: version, buffer size, count
 	 * v1 format: pcr, digest, template-name-len, template-name,
@@ -387,35 +370,28 @@ int ima_restore_measurement_list(loff_t size, void *buf)
 	 */
 	bufendp = buf + khdr->buffer_size;
 	while ((bufp < bufendp) && (count++ < khdr->count)) {
-		hdr_v1 = bufp;
-		if (bufp > (bufendp - sizeof(*hdr_v1))) {
-			pr_err("attempting to restore partial measurement\n");
+		int enforce_mask = ENFORCE_FIELDS;
+
+		enforce_mask |= (count == khdr->count) ? ENFORCE_BUFEND : 0;
+		ret = ima_parse_buf(bufp, bufendp, &bufp, HDR__LAST, hdr, NULL,
+				    hdr_mask, enforce_mask, "entry header");
+		if (ret < 0)
+			break;
+
+		if (hdr[HDR_TEMPLATE_NAME].len >= MAX_TEMPLATE_NAME_LEN) {
+			pr_err("attempting to restore a template name that is too long\n");
 			ret = -EINVAL;
 			break;
 		}
-		bufp += sizeof(*hdr_v1);
-
-		if (ima_canonical_fmt)
-			hdr_v1->template_name_len =
-			    le32_to_cpu(hdr_v1->template_name_len);
-
-		if ((hdr_v1->template_name_len >= MAX_TEMPLATE_NAME_LEN) ||
-		    (bufp > (bufendp - hdr_v1->template_name_len))) {
-			pr_err("attempting to restore a template name \
-				that is too long\n");
-			ret = -EINVAL;
-			break;
-		}
-		data_v1 = bufp += (u_int8_t)hdr_v1->template_name_len;
 
 		/* template name is not null terminated */
-		memcpy(template_name, hdr_v1->template_name,
-		       hdr_v1->template_name_len);
-		template_name[hdr_v1->template_name_len] = 0;
+		memcpy(template_name, hdr[HDR_TEMPLATE_NAME].data,
+		       hdr[HDR_TEMPLATE_NAME].len);
+		template_name[hdr[HDR_TEMPLATE_NAME].len] = 0;
 
 		if (strcmp(template_name, "ima") == 0) {
-			pr_err("attempting to restore an unsupported \
-				template \"%s\" failed\n", template_name);
+			pr_err("attempting to restore an unsupported template \"%s\" failed\n",
+			       template_name);
 			ret = -EINVAL;
 			break;
 		}
@@ -435,40 +411,23 @@ int ima_restore_measurement_list(loff_t size, void *buf)
 						&(template_desc->fields),
 						&(template_desc->num_fields));
 		if (ret < 0) {
-			pr_err("attempting to restore the template fmt \"%s\" \
-				failed\n", template_desc->fmt);
+			pr_err("attempting to restore the template fmt \"%s\" failed\n",
+			       template_desc->fmt);
 			ret = -EINVAL;
 			break;
 		}
-
-		if (bufp > (bufendp - sizeof(data_v1->template_data_size))) {
-			pr_err("restoring the template data size failed\n");
-			ret = -EINVAL;
-			break;
-		}
-		bufp += (u_int8_t) sizeof(data_v1->template_data_size);
-
-		if (ima_canonical_fmt)
-			data_v1->template_data_size =
-			    le32_to_cpu(data_v1->template_data_size);
-
-		if (bufp > (bufendp - data_v1->template_data_size)) {
-			pr_err("restoring the template data failed\n");
-			ret = -EINVAL;
-			break;
-		}
-		bufp += data_v1->template_data_size;
 
 		ret = ima_restore_template_data(template_desc,
-						data_v1->template_data,
-						data_v1->template_data_size,
+						hdr[HDR_TEMPLATE_DATA].data,
+						hdr[HDR_TEMPLATE_DATA].len,
 						&entry);
 		if (ret < 0)
 			break;
 
-		memcpy(entry->digest, hdr_v1->digest, TPM_DIGEST_SIZE);
-		entry->pcr =
-		    !ima_canonical_fmt ? hdr_v1->pcr : le32_to_cpu(hdr_v1->pcr);
+		memcpy(entry->digest, hdr[HDR_DIGEST].data,
+		       hdr[HDR_DIGEST].len);
+		entry->pcr = !ima_canonical_fmt ? *(hdr[HDR_PCR].data) :
+			     le32_to_cpu(*(hdr[HDR_PCR].data));
 		ret = ima_restore_measurement_entry(entry);
 		if (ret < 0)
 			break;

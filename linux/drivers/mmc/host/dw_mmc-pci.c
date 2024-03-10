@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Synopsys DesignWare Multimedia Card PCI Interface driver
  *
  * Copyright (C) 2012 Vayavya Labs Pvt. Ltd.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
  */
 
 #include <linux/interrupt.h>
@@ -18,7 +14,6 @@
 #include <linux/slab.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/mmc.h>
-#include <linux/mmc/dw_mmc.h>
 #include "dw_mmc.h"
 
 #define PCI_BAR_NO 2
@@ -30,7 +25,6 @@
 				MMC_CAP_SDIO_IRQ)
 
 static struct dw_mci_board pci_board_data = {
-	.num_slots			= 1,
 	.caps				= DW_MCI_CAPABILITIES,
 	.bus_hz				= 33 * 1000 * 1000,
 	.detect_delay_ms		= 200,

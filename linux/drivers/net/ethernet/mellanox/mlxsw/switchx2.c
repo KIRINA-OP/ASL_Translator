@@ -1,38 +1,5 @@
-/*
- * drivers/net/ethernet/mellanox/mlxsw/switchx2.c
- * Copyright (c) 2015 Mellanox Technologies. All rights reserved.
- * Copyright (c) 2015 Jiri Pirko <jiri@mellanox.com>
- * Copyright (c) 2015 Ido Schimmel <idosch@mellanox.com>
- * Copyright (c) 2015-2016 Elad Raz <eladr@mellanox.com>
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the names of the copyright holders nor the names of its
- *    contributors may be used to endorse or promote products derived from
- *    this software without specific prior written permission.
- *
- * Alternatively, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") version 2 as published by the Free
- * Software Foundation.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+// SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0
+/* Copyright (c) 2015-2018 Mellanox Technologies. All rights reserved */
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -44,7 +11,6 @@
 #include <linux/device.h>
 #include <linux/skbuff.h>
 #include <linux/if_vlan.h>
-#include <net/switchdev.h>
 
 #include "pci.h"
 #include "core.h"
@@ -333,6 +299,8 @@ static netdev_tx_t mlxsw_sx_port_xmit(struct sk_buff *skb,
 	u64 len;
 	int err;
 
+	memset(skb->cb, 0, sizeof(struct mlxsw_skb_cb));
+
 	if (mlxsw_core_skb_transmit_busy(mlxsw_sx->core, &tx_info))
 		return NETDEV_TX_BUSY;
 
@@ -382,7 +350,7 @@ static int mlxsw_sx_port_change_mtu(struct net_device *dev, int mtu)
 	return 0;
 }
 
-static struct rtnl_link_stats64 *
+static void
 mlxsw_sx_port_get_stats64(struct net_device *dev,
 			  struct rtnl_link_stats64 *stats)
 {
@@ -411,20 +379,16 @@ mlxsw_sx_port_get_stats64(struct net_device *dev,
 		tx_dropped	+= p->tx_dropped;
 	}
 	stats->tx_dropped	= tx_dropped;
-	return stats;
 }
 
-static int mlxsw_sx_port_get_phys_port_name(struct net_device *dev, char *name,
-					    size_t len)
+static struct devlink_port *
+mlxsw_sx_port_get_devlink_port(struct net_device *dev)
 {
 	struct mlxsw_sx_port *mlxsw_sx_port = netdev_priv(dev);
-	int err;
+	struct mlxsw_sx *mlxsw_sx = mlxsw_sx_port->mlxsw_sx;
 
-	err = snprintf(name, len, "p%d", mlxsw_sx_port->mapping.module + 1);
-	if (err >= len)
-		return -EINVAL;
-
-	return 0;
+	return mlxsw_core_port_devlink_port_get(mlxsw_sx->core,
+						mlxsw_sx_port->local_port);
 }
 
 static const struct net_device_ops mlxsw_sx_port_netdev_ops = {
@@ -433,7 +397,7 @@ static const struct net_device_ops mlxsw_sx_port_netdev_ops = {
 	.ndo_start_xmit		= mlxsw_sx_port_xmit,
 	.ndo_change_mtu		= mlxsw_sx_port_change_mtu,
 	.ndo_get_stats64	= mlxsw_sx_port_get_stats64,
-	.ndo_get_phys_port_name = mlxsw_sx_port_get_phys_port_name,
+	.ndo_get_devlink_port	= mlxsw_sx_port_get_devlink_port,
 };
 
 static void mlxsw_sx_port_get_drvinfo(struct net_device *dev,
@@ -734,7 +698,7 @@ static u32 mlxsw_sx_from_ptys_advert_link(u32 ptys_eth_proto)
 }
 
 static void mlxsw_sx_from_ptys_speed_duplex(bool carrier_ok, u32 ptys_eth_proto,
-					    struct ethtool_cmd *cmd)
+					    struct ethtool_link_ksettings *cmd)
 {
 	u32 speed = SPEED_UNKNOWN;
 	u8 duplex = DUPLEX_UNKNOWN;
@@ -751,8 +715,8 @@ static void mlxsw_sx_from_ptys_speed_duplex(bool carrier_ok, u32 ptys_eth_proto,
 		}
 	}
 out:
-	ethtool_cmd_speed_set(cmd, speed);
-	cmd->duplex = duplex;
+	cmd->base.speed = speed;
+	cmd->base.duplex = duplex;
 }
 
 static u8 mlxsw_sx_port_connector_port(u32 ptys_eth_proto)
@@ -777,8 +741,9 @@ static u8 mlxsw_sx_port_connector_port(u32 ptys_eth_proto)
 	return PORT_OTHER;
 }
 
-static int mlxsw_sx_port_get_settings(struct net_device *dev,
-				      struct ethtool_cmd *cmd)
+static int
+mlxsw_sx_port_get_link_ksettings(struct net_device *dev,
+				 struct ethtool_link_ksettings *cmd)
 {
 	struct mlxsw_sx_port *mlxsw_sx_port = netdev_priv(dev);
 	struct mlxsw_sx *mlxsw_sx = mlxsw_sx_port->mlxsw_sx;
@@ -786,9 +751,10 @@ static int mlxsw_sx_port_get_settings(struct net_device *dev,
 	u32 eth_proto_cap;
 	u32 eth_proto_admin;
 	u32 eth_proto_oper;
+	u32 supported, advertising, lp_advertising;
 	int err;
 
-	mlxsw_reg_ptys_eth_pack(ptys_pl, mlxsw_sx_port->local_port, 0);
+	mlxsw_reg_ptys_eth_pack(ptys_pl, mlxsw_sx_port->local_port, 0, false);
 	err = mlxsw_reg_query(mlxsw_sx->core, MLXSW_REG(ptys), ptys_pl);
 	if (err) {
 		netdev_err(dev, "Failed to get proto");
@@ -797,18 +763,24 @@ static int mlxsw_sx_port_get_settings(struct net_device *dev,
 	mlxsw_reg_ptys_eth_unpack(ptys_pl, &eth_proto_cap,
 				  &eth_proto_admin, &eth_proto_oper);
 
-	cmd->supported = mlxsw_sx_from_ptys_supported_port(eth_proto_cap) |
+	supported = mlxsw_sx_from_ptys_supported_port(eth_proto_cap) |
 			 mlxsw_sx_from_ptys_supported_link(eth_proto_cap) |
 			 SUPPORTED_Pause | SUPPORTED_Asym_Pause;
-	cmd->advertising = mlxsw_sx_from_ptys_advert_link(eth_proto_admin);
+	advertising = mlxsw_sx_from_ptys_advert_link(eth_proto_admin);
 	mlxsw_sx_from_ptys_speed_duplex(netif_carrier_ok(dev),
 					eth_proto_oper, cmd);
 
 	eth_proto_oper = eth_proto_oper ? eth_proto_oper : eth_proto_cap;
-	cmd->port = mlxsw_sx_port_connector_port(eth_proto_oper);
-	cmd->lp_advertising = mlxsw_sx_from_ptys_advert_link(eth_proto_oper);
+	cmd->base.port = mlxsw_sx_port_connector_port(eth_proto_oper);
+	lp_advertising = mlxsw_sx_from_ptys_advert_link(eth_proto_oper);
 
-	cmd->transceiver = XCVR_INTERNAL;
+	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.supported,
+						supported);
+	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.advertising,
+						advertising);
+	ethtool_convert_legacy_u32_to_link_mode(cmd->link_modes.lp_advertising,
+						lp_advertising);
+
 	return 0;
 }
 
@@ -848,8 +820,9 @@ static u32 mlxsw_sx_to_ptys_upper_speed(u32 upper_speed)
 	return ptys_proto;
 }
 
-static int mlxsw_sx_port_set_settings(struct net_device *dev,
-				      struct ethtool_cmd *cmd)
+static int
+mlxsw_sx_port_set_link_ksettings(struct net_device *dev,
+				 const struct ethtool_link_ksettings *cmd)
 {
 	struct mlxsw_sx_port *mlxsw_sx_port = netdev_priv(dev);
 	struct mlxsw_sx *mlxsw_sx = mlxsw_sx_port->mlxsw_sx;
@@ -858,16 +831,20 @@ static int mlxsw_sx_port_set_settings(struct net_device *dev,
 	u32 eth_proto_new;
 	u32 eth_proto_cap;
 	u32 eth_proto_admin;
+	u32 advertising;
 	bool is_up;
 	int err;
 
-	speed = ethtool_cmd_speed(cmd);
+	speed = cmd->base.speed;
 
-	eth_proto_new = cmd->autoneg == AUTONEG_ENABLE ?
-		mlxsw_sx_to_ptys_advert_link(cmd->advertising) :
+	ethtool_convert_link_mode_to_legacy_u32(&advertising,
+						cmd->link_modes.advertising);
+
+	eth_proto_new = cmd->base.autoneg == AUTONEG_ENABLE ?
+		mlxsw_sx_to_ptys_advert_link(advertising) :
 		mlxsw_sx_to_ptys_speed(speed);
 
-	mlxsw_reg_ptys_eth_pack(ptys_pl, mlxsw_sx_port->local_port, 0);
+	mlxsw_reg_ptys_eth_pack(ptys_pl, mlxsw_sx_port->local_port, 0, false);
 	err = mlxsw_reg_query(mlxsw_sx->core, MLXSW_REG(ptys), ptys_pl);
 	if (err) {
 		netdev_err(dev, "Failed to get proto");
@@ -885,7 +862,7 @@ static int mlxsw_sx_port_set_settings(struct net_device *dev,
 		return 0;
 
 	mlxsw_reg_ptys_eth_pack(ptys_pl, mlxsw_sx_port->local_port,
-				eth_proto_new);
+				eth_proto_new, true);
 	err = mlxsw_reg_write(mlxsw_sx->core, MLXSW_REG(ptys), ptys_pl);
 	if (err) {
 		netdev_err(dev, "Failed to set proto admin");
@@ -921,30 +898,8 @@ static const struct ethtool_ops mlxsw_sx_port_ethtool_ops = {
 	.get_strings		= mlxsw_sx_port_get_strings,
 	.get_ethtool_stats	= mlxsw_sx_port_get_stats,
 	.get_sset_count		= mlxsw_sx_port_get_sset_count,
-	.get_settings		= mlxsw_sx_port_get_settings,
-	.set_settings		= mlxsw_sx_port_set_settings,
-};
-
-static int mlxsw_sx_port_attr_get(struct net_device *dev,
-				  struct switchdev_attr *attr)
-{
-	struct mlxsw_sx_port *mlxsw_sx_port = netdev_priv(dev);
-	struct mlxsw_sx *mlxsw_sx = mlxsw_sx_port->mlxsw_sx;
-
-	switch (attr->id) {
-	case SWITCHDEV_ATTR_ID_PORT_PARENT_ID:
-		attr->u.ppid.id_len = sizeof(mlxsw_sx->hw_id);
-		memcpy(&attr->u.ppid.id, &mlxsw_sx->hw_id, attr->u.ppid.id_len);
-		break;
-	default:
-		return -EOPNOTSUPP;
-	}
-
-	return 0;
-}
-
-static const struct switchdev_ops mlxsw_sx_port_switchdev_ops = {
-	.switchdev_port_attr_get	= mlxsw_sx_port_attr_get,
+	.get_link_ksettings	= mlxsw_sx_port_get_link_ksettings,
+	.set_link_ksettings	= mlxsw_sx_port_set_link_ksettings,
 };
 
 static int mlxsw_sx_hw_id_get(struct mlxsw_sx *mlxsw_sx)
@@ -1017,7 +972,7 @@ mlxsw_sx_port_speed_by_width_set(struct mlxsw_sx_port *mlxsw_sx_port, u8 width)
 
 	eth_proto_admin = mlxsw_sx_to_ptys_upper_speed(upper_speed);
 	mlxsw_reg_ptys_eth_pack(ptys_pl, mlxsw_sx_port->local_port,
-				eth_proto_admin);
+				eth_proto_admin, true);
 	return mlxsw_reg_write(mlxsw_sx->core, MLXSW_REG(ptys), ptys_pl);
 }
 
@@ -1058,7 +1013,6 @@ static int __mlxsw_sx_port_eth_create(struct mlxsw_sx *mlxsw_sx, u8 local_port,
 
 	dev->netdev_ops = &mlxsw_sx_port_netdev_ops;
 	dev->ethtool_ops = &mlxsw_sx_port_ethtool_ops;
-	dev->switchdev_ops = &mlxsw_sx_port_switchdev_ops;
 
 	err = mlxsw_sx_port_dev_addr_get(mlxsw_sx_port);
 	if (err) {
@@ -1137,7 +1091,7 @@ static int __mlxsw_sx_port_eth_create(struct mlxsw_sx *mlxsw_sx, u8 local_port,
 	}
 
 	mlxsw_core_port_eth_set(mlxsw_sx->core, mlxsw_sx_port->local_port,
-				mlxsw_sx_port, dev, false, 0);
+				mlxsw_sx_port, dev);
 	mlxsw_sx->ports[local_port] = mlxsw_sx_port;
 	return 0;
 
@@ -1162,7 +1116,9 @@ static int mlxsw_sx_port_eth_create(struct mlxsw_sx *mlxsw_sx, u8 local_port,
 {
 	int err;
 
-	err = mlxsw_core_port_init(mlxsw_sx->core, local_port);
+	err = mlxsw_core_port_init(mlxsw_sx->core, local_port,
+				   module + 1, false, 0,
+				   mlxsw_sx->hw_id, sizeof(mlxsw_sx->hw_id));
 	if (err) {
 		dev_err(mlxsw_sx->bus_info->dev, "Port %d: Failed to init core port\n",
 			local_port);
@@ -1309,7 +1265,7 @@ static void mlxsw_sx_ports_remove(struct mlxsw_sx *mlxsw_sx)
 {
 	int i;
 
-	for (i = 1; i < MLXSW_PORT_MAX_PORTS; i++)
+	for (i = 1; i < mlxsw_core_max_ports(mlxsw_sx->core); i++)
 		if (mlxsw_sx_port_created(mlxsw_sx, i))
 			mlxsw_sx_port_remove(mlxsw_sx, i);
 	kfree(mlxsw_sx->ports);
@@ -1317,17 +1273,18 @@ static void mlxsw_sx_ports_remove(struct mlxsw_sx *mlxsw_sx)
 
 static int mlxsw_sx_ports_create(struct mlxsw_sx *mlxsw_sx)
 {
+	unsigned int max_ports = mlxsw_core_max_ports(mlxsw_sx->core);
 	size_t alloc_size;
 	u8 module, width;
 	int i;
 	int err;
 
-	alloc_size = sizeof(struct mlxsw_sx_port *) * MLXSW_PORT_MAX_PORTS;
+	alloc_size = sizeof(struct mlxsw_sx_port *) * max_ports;
 	mlxsw_sx->ports = kzalloc(alloc_size, GFP_KERNEL);
 	if (!mlxsw_sx->ports)
 		return -ENOMEM;
 
-	for (i = 1; i < MLXSW_PORT_MAX_PORTS; i++) {
+	for (i = 1; i < max_ports; i++) {
 		err = mlxsw_sx_port_module_info_get(mlxsw_sx, i, &module,
 						    &width);
 		if (err)
@@ -1661,7 +1618,7 @@ static void mlxsw_sx_fini(struct mlxsw_core *mlxsw_core)
 	mlxsw_sx_ports_remove(mlxsw_sx);
 }
 
-static struct mlxsw_config_profile mlxsw_sx_config_profile = {
+static const struct mlxsw_config_profile mlxsw_sx_config_profile = {
 	.used_max_vepa_channels		= 1,
 	.max_vepa_channels		= 0,
 	.used_max_mid			= 1,
@@ -1693,7 +1650,6 @@ static struct mlxsw_config_profile mlxsw_sx_config_profile = {
 			.type		= MLXSW_PORT_SWID_TYPE_IB,
 		}
 	},
-	.resource_query_enable		= 0,
 };
 
 static struct mlxsw_driver mlxsw_sx_driver = {

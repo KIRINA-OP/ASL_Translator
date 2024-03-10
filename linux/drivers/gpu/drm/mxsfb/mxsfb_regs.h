@@ -1,17 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright (C) 2010 Juergen Beisert, Pengutronix
  * Copyright (C) 2016 Marek Vasut <marex@denx.de>
  *
  * i.MX23/i.MX28/i.MX6SX MXSFB LCD controller driver.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef __MXSFB_REGS_H__
@@ -44,6 +36,7 @@
 #define CTRL_DATA_SELECT		(1 << 16)
 #define CTRL_SET_BUS_WIDTH(x)		(((x) & 0x3) << 10)
 #define CTRL_GET_BUS_WIDTH(x)		(((x) >> 10) & 0x3)
+#define CTRL_BUS_WIDTH_MASK		(0x3 << 10)
 #define CTRL_SET_WORD_LENGTH(x)		(((x) & 0x3) << 8)
 #define CTRL_GET_WORD_LENGTH(x)		(((x) >> 8) & 0x3)
 #define CTRL_MASTER			(1 << 5)

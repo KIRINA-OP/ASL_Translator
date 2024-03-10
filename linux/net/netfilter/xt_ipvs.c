@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *	xt_ipvs - kernel module to match IPVS connection properties
  *
@@ -116,7 +117,7 @@ ipvs_mt(const struct sk_buff *skb, struct xt_action_param *par)
 		enum ip_conntrack_info ctinfo;
 		struct nf_conn *ct = nf_ct_get(skb, &ctinfo);
 
-		if (ct == NULL || nf_ct_is_untracked(ct)) {
+		if (ct == NULL) {
 			match = false;
 			goto out_put_cp;
 		}
@@ -158,7 +159,8 @@ static int ipvs_mt_check(const struct xt_mtchk_param *par)
 	    && par->family != NFPROTO_IPV6
 #endif
 		) {
-		pr_info("protocol family %u not supported\n", par->family);
+		pr_info_ratelimited("protocol family %u not supported\n",
+				    par->family);
 		return -EINVAL;
 	}
 

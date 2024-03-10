@@ -1,3 +1,5 @@
+.. _kernelparameters:
+
 The kernel's command-line parameters
 ====================================
 
@@ -7,11 +9,11 @@ and sorted into English Dictionary order (defined as ignoring all
 punctuation and sorting digits before letters in a case insensitive
 manner), and with descriptions where known.
 
-The kernel parses parameters from the kernel command line up to "--";
+The kernel parses parameters from the kernel command line up to "``--``";
 if it doesn't recognize a parameter and it doesn't contain a '.', the
 parameter gets passed to init: parameters with '=' go into init's
 environment, others are passed as command line arguments to init.
-Everything after "--" is passed as an argument to init.
+Everything after "``--``" is passed as an argument to init.
 
 Module parameters can be specified in two ways: via the kernel command
 line with a module name prefix, or via modprobe, e.g.::
@@ -86,9 +88,8 @@ parameter is applicable::
 	APIC	APIC support is enabled.
 	APM	Advanced Power Management support is enabled.
 	ARM	ARM architecture is enabled.
-	AVR32	AVR32 architecture is enabled.
+	ARM64	ARM64 architecture is enabled.
 	AX25	Appropriate AX.25 support is enabled.
-	BLACKFIN Blackfin architecture is enabled.
 	CLK	Common clock infrastructure is enabled.
 	CMA	Contiguous Memory Area support is enabled.
 	DRM	Direct Rendering Management support is enabled.
@@ -108,6 +109,7 @@ parameter is applicable::
 	IPV6	IPv6 support is enabled.
 	ISAPNP	ISA PnP code is enabled.
 	ISDN	Appropriate ISDN support is enabled.
+	ISOL	CPU Isolation is enabled.
 	JOY	Appropriate joystick support is enabled.
 	KGDB	Kernel debugger support is enabled.
 	KVM	Kernel Virtual Machine support is enabled.
@@ -137,6 +139,7 @@ parameter is applicable::
 	PPT	Parallel port support is enabled.
 	PS2	Appropriate PS/2 support is enabled.
 	RAM	RAM disk support is enabled.
+	RDT	Intel Resource Director Technology.
 	S390	S390 architecture is enabled.
 	SCSI	Appropriate SCSI support is enabled.
 			A lot of drivers have their options described inside
@@ -164,7 +167,7 @@ parameter is applicable::
 	X86-32	X86-32, aka i386 architecture is enabled.
 	X86-64	X86-64 architecture is enabled.
 			More X86-64 boot options can be found in
-			Documentation/x86/x86_64/boot-options.txt .
+			Documentation/x86/x86_64/boot-options.rst.
 	X86	Either 32-bit or 64-bit x86 (same as X86-32+X86-64)
 	X86_UV	SGI UV support is enabled.
 	XEN	Xen support is enabled
@@ -178,10 +181,10 @@ In addition, the following text indicates that the option::
 Parameters denoted with BOOT are actually interpreted by the boot
 loader, and have no meaning to the kernel directly.
 Do not modify the syntax of boot loader parameters without extreme
-need or coordination with <Documentation/x86/boot.txt>.
+need or coordination with <Documentation/x86/boot.rst>.
 
 There are also arch-specific kernel-parameters not documented here.
-See for example <Documentation/x86/x86_64/boot-options.txt>.
+See for example <Documentation/x86/x86_64/boot-options.rst>.
 
 Note that ALL kernel parameters listed below are CASE SENSITIVE, and that
 a trailing = on the name of any parameter states that that parameter will
@@ -197,7 +200,7 @@ and is between 256 and 4096 characters. It is defined in the file
 
 Finally, the [KMG] suffix is commonly described after a number of kernel
 parameter values. These 'K', 'M', and 'G' letters represent the _binary_
-multipliers 'Kilo', 'Mega', and 'Giga', equalling 2^10, 2^20, and 2^30
+multipliers 'Kilo', 'Mega', and 'Giga', equaling 2^10, 2^20, and 2^30
 bytes respectively. Such letter suffixes can also be entirely omitted:
 
 .. include:: kernel-parameters.txt

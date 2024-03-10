@@ -1,22 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Programming the mspx4xx sound processor family
  *
  * (c) 1997-2001 Gerd Knorr <kraxel@bytesex.org>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA.
  */
 
 
@@ -660,6 +646,7 @@ restart:
 			break;
 		case 0: /* 4.5 */
 			state->detected_std = V4L2_STD_MN;
+			/* fall-through */
 		default:
 no_second:
 			state->second = msp3400c_carrier_detect_main[max1].cdo;
@@ -889,7 +876,7 @@ static int msp34xxg_modus(struct i2c_client *client)
 }
 
 static void msp34xxg_set_source(struct i2c_client *client, u16 reg, int in)
- {
+{
 	struct msp_state *state = to_state(i2c_get_clientdata(client));
 	int source, matrix;
 

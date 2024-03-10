@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * System timer for CSR SiRFprimaII
  *
  * Copyright (c) 2011 Cambridge Silicon Radio Limited, a CSR plc group company.
- *
- * Licensed under GPLv2 or later.
  */
 
 #include <linux/kernel.h>
@@ -192,7 +191,9 @@ static int sirfsoc_local_timer_starting_cpu(unsigned int cpu)
 	ce->set_next_event = sirfsoc_timer_set_next_event;
 	clockevents_calc_mult_shift(ce, atlas7_timer_rate, 60);
 	ce->max_delta_ns = clockevent_delta2ns(-2, ce);
+	ce->max_delta_ticks = (unsigned long)-2;
 	ce->min_delta_ns = clockevent_delta2ns(2, ce);
+	ce->min_delta_ticks = 2;
 	ce->cpumask = cpumask_of(cpu);
 
 	action->dev_id = ce;
@@ -281,4 +282,4 @@ static int __init sirfsoc_of_timer_init(struct device_node *np)
 
 	return sirfsoc_atlas7_timer_init(np);
 }
-CLOCKSOURCE_OF_DECLARE(sirfsoc_atlas7_timer, "sirf,atlas7-tick", sirfsoc_of_timer_init);
+TIMER_OF_DECLARE(sirfsoc_atlas7_timer, "sirf,atlas7-tick", sirfsoc_of_timer_init);

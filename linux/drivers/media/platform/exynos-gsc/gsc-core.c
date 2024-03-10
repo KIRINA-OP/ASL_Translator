@@ -1,13 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Copyright (c) 2011 - 2012 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com
  *
  * Samsung EXYNOS5 SoC series G-Scaler driver
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published
- * by the Free Software Foundation, either version 2 of the License,
- * or (at your option) any later version.
  */
 
 #include <linux/module.h>
@@ -112,6 +108,15 @@ static const struct gsc_fmt gsc_formats[] = {
 		.num_planes	= 1,
 		.num_comp	= 2,
 	}, {
+		.name		= "YUV 4:2:2 non-contig, Y/CbCr",
+		.pixelformat	= V4L2_PIX_FMT_NV16M,
+		.depth		= { 8, 8 },
+		.color		= GSC_YUV422,
+		.yorder		= GSC_LSB_Y,
+		.corder		= GSC_CBCR,
+		.num_planes	= 2,
+		.num_comp	= 2,
+	}, {
 		.name		= "YUV 4:2:2 planar, Y/CrCb",
 		.pixelformat	= V4L2_PIX_FMT_NV61,
 		.depth		= { 16 },
@@ -119,6 +124,15 @@ static const struct gsc_fmt gsc_formats[] = {
 		.yorder		= GSC_LSB_Y,
 		.corder		= GSC_CRCB,
 		.num_planes	= 1,
+		.num_comp	= 2,
+	}, {
+		.name		= "YUV 4:2:2 non-contig, Y/CrCb",
+		.pixelformat	= V4L2_PIX_FMT_NV61M,
+		.depth		= { 8, 8 },
+		.color		= GSC_YUV422,
+		.yorder		= GSC_LSB_Y,
+		.corder		= GSC_CRCB,
+		.num_planes	= 2,
 		.num_comp	= 2,
 	}, {
 		.name		= "YUV 4:2:0 planar, YCbCr",
@@ -156,6 +170,15 @@ static const struct gsc_fmt gsc_formats[] = {
 		.yorder		= GSC_LSB_Y,
 		.corder		= GSC_CRCB,
 		.num_planes	= 1,
+		.num_comp	= 2,
+	}, {
+		.name		= "YUV 4:2:0 non-contig. 2p, Y/CrCb",
+		.pixelformat	= V4L2_PIX_FMT_NV21M,
+		.depth		= { 8, 4 },
+		.color		= GSC_YUV420,
+		.yorder		= GSC_LSB_Y,
+		.corder		= GSC_CRCB,
+		.num_planes	= 2,
 		.num_comp	= 2,
 	}, {
 		.name		= "YUV 4:2:0 non-contig. 2p, Y/CbCr",
@@ -304,7 +327,7 @@ void gsc_check_src_scale_info(struct gsc_variant *var,
 	}
 }
 
-int gsc_enum_fmt_mplane(struct v4l2_fmtdesc *f)
+int gsc_enum_fmt(struct v4l2_fmtdesc *f)
 {
 	const struct gsc_fmt *fmt;
 
@@ -312,7 +335,7 @@ int gsc_enum_fmt_mplane(struct v4l2_fmtdesc *f)
 	if (!fmt)
 		return -EINVAL;
 
-	strlcpy(f->description, fmt->name, sizeof(f->description));
+	strscpy(f->description, fmt->name, sizeof(f->description));
 	f->pixelformat = fmt->pixelformat;
 
 	return 0;
@@ -408,7 +431,7 @@ int gsc_try_fmt_mplane(struct gsc_ctx *ctx, struct v4l2_format *f)
 	if (pix_mp->field == V4L2_FIELD_ANY)
 		pix_mp->field = V4L2_FIELD_NONE;
 	else if (pix_mp->field != V4L2_FIELD_NONE) {
-		pr_err("Not supported field order(%d)\n", pix_mp->field);
+		pr_debug("Not supported field order(%d)\n", pix_mp->field);
 		return -EINVAL;
 	}
 
@@ -427,6 +450,7 @@ int gsc_try_fmt_mplane(struct gsc_ctx *ctx, struct v4l2_format *f)
 	} else {
 		min_w = variant->pix_min->target_rot_dis_w;
 		min_h = variant->pix_min->target_rot_dis_h;
+		pix_mp->colorspace = ctx->out_colorspace;
 	}
 
 	pr_debug("mod_x: %d, mod_y: %d, max_w: %d, max_h = %d",
@@ -445,10 +469,8 @@ int gsc_try_fmt_mplane(struct gsc_ctx *ctx, struct v4l2_format *f)
 
 	pix_mp->num_planes = fmt->num_planes;
 
-	if (pix_mp->width >= 1280) /* HD */
-		pix_mp->colorspace = V4L2_COLORSPACE_REC709;
-	else /* SD */
-		pix_mp->colorspace = V4L2_COLORSPACE_SMPTE170M;
+	if (V4L2_TYPE_IS_OUTPUT(f->type))
+		ctx->out_colorspace = pix_mp->colorspace;
 
 	for (i = 0; i < pix_mp->num_planes; ++i) {
 		struct v4l2_plane_pix_format *plane_fmt = &pix_mp->plane_fmt[i];
@@ -492,8 +514,8 @@ int gsc_g_fmt_mplane(struct gsc_ctx *ctx, struct v4l2_format *f)
 	pix_mp->height		= frame->f_height;
 	pix_mp->field		= V4L2_FIELD_NONE;
 	pix_mp->pixelformat	= frame->fmt->pixelformat;
-	pix_mp->colorspace	= V4L2_COLORSPACE_REC709;
 	pix_mp->num_planes	= frame->fmt->num_planes;
+	pix_mp->colorspace = ctx->out_colorspace;
 
 	for (i = 0; i < pix_mp->num_planes; ++i) {
 		pix_mp->plane_fmt[i].bytesperline = (frame->f_width *
@@ -515,20 +537,7 @@ void gsc_check_crop_change(u32 tmp_w, u32 tmp_h, u32 *w, u32 *h)
 	}
 }
 
-int gsc_g_crop(struct gsc_ctx *ctx, struct v4l2_crop *cr)
-{
-	struct gsc_frame *frame;
-
-	frame = ctx_get_frame(ctx, cr->type);
-	if (IS_ERR(frame))
-		return PTR_ERR(frame);
-
-	cr->c = frame->crop;
-
-	return 0;
-}
-
-int gsc_try_crop(struct gsc_ctx *ctx, struct v4l2_crop *cr)
+int gsc_try_selection(struct gsc_ctx *ctx, struct v4l2_selection *s)
 {
 	struct gsc_frame *f;
 	struct gsc_dev *gsc = ctx->gsc_dev;
@@ -536,25 +545,25 @@ int gsc_try_crop(struct gsc_ctx *ctx, struct v4l2_crop *cr)
 	u32 mod_x = 0, mod_y = 0, tmp_w, tmp_h;
 	u32 min_w, min_h, max_w, max_h;
 
-	if (cr->c.top < 0 || cr->c.left < 0) {
+	if (s->r.top < 0 || s->r.left < 0) {
 		pr_err("doesn't support negative values for top & left\n");
 		return -EINVAL;
 	}
-	pr_debug("user put w: %d, h: %d", cr->c.width, cr->c.height);
+	pr_debug("user put w: %d, h: %d", s->r.width, s->r.height);
 
-	if (cr->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
+	if (s->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		f = &ctx->d_frame;
-	else if (cr->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
+	else if (s->type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
 		f = &ctx->s_frame;
 	else
 		return -EINVAL;
 
 	max_w = f->f_width;
 	max_h = f->f_height;
-	tmp_w = cr->c.width;
-	tmp_h = cr->c.height;
+	tmp_w = s->r.width;
+	tmp_h = s->r.height;
 
-	if (V4L2_TYPE_IS_OUTPUT(cr->type)) {
+	if (V4L2_TYPE_IS_OUTPUT(s->type)) {
 		if ((is_yuv422(f->fmt->color) && f->fmt->num_comp == 1) ||
 		    is_rgb(f->fmt->color))
 			min_w = 32;
@@ -576,8 +585,8 @@ int gsc_try_crop(struct gsc_ctx *ctx, struct v4l2_crop *cr)
 			max_h = f->f_width;
 			min_w = variant->pix_min->target_rot_en_w;
 			min_h = variant->pix_min->target_rot_en_h;
-			tmp_w = cr->c.height;
-			tmp_h = cr->c.width;
+			tmp_w = s->r.height;
+			tmp_h = s->r.width;
 		} else {
 			min_w = variant->pix_min->target_rot_dis_w;
 			min_h = variant->pix_min->target_rot_dis_h;
@@ -590,29 +599,29 @@ int gsc_try_crop(struct gsc_ctx *ctx, struct v4l2_crop *cr)
 	v4l_bound_align_image(&tmp_w, min_w, max_w, mod_x,
 			      &tmp_h, min_h, max_h, mod_y, 0);
 
-	if (!V4L2_TYPE_IS_OUTPUT(cr->type) &&
-		(ctx->gsc_ctrls.rotate->val == 90 ||
-		ctx->gsc_ctrls.rotate->val == 270))
+	if (!V4L2_TYPE_IS_OUTPUT(s->type) &&
+	    (ctx->gsc_ctrls.rotate->val == 90 ||
+	     ctx->gsc_ctrls.rotate->val == 270))
 		gsc_check_crop_change(tmp_h, tmp_w,
-					&cr->c.width, &cr->c.height);
+					&s->r.width, &s->r.height);
 	else
 		gsc_check_crop_change(tmp_w, tmp_h,
-					&cr->c.width, &cr->c.height);
+					&s->r.width, &s->r.height);
 
 
 	/* adjust left/top if cropping rectangle is out of bounds */
 	/* Need to add code to algin left value with 2's multiple */
-	if (cr->c.left + tmp_w > max_w)
-		cr->c.left = max_w - tmp_w;
-	if (cr->c.top + tmp_h > max_h)
-		cr->c.top = max_h - tmp_h;
+	if (s->r.left + tmp_w > max_w)
+		s->r.left = max_w - tmp_w;
+	if (s->r.top + tmp_h > max_h)
+		s->r.top = max_h - tmp_h;
 
 	if ((is_yuv420(f->fmt->color) || is_yuv422(f->fmt->color)) &&
-		cr->c.left & 1)
-			cr->c.left -= 1;
+	    s->r.left & 1)
+		s->r.left -= 1;
 
 	pr_debug("Aligned l:%d, t:%d, w:%d, h:%d, f_w: %d, f_h: %d",
-	    cr->c.left, cr->c.top, cr->c.width, cr->c.height, max_w, max_h);
+		 s->r.left, s->r.top, s->r.width, s->r.height, max_w, max_h);
 
 	return 0;
 }
@@ -861,9 +870,7 @@ int gsc_prepare_addr(struct gsc_ctx *ctx, struct vb2_buffer *vb,
 
 	if ((frame->fmt->pixelformat == V4L2_PIX_FMT_VYUY) ||
 		(frame->fmt->pixelformat == V4L2_PIX_FMT_YVYU) ||
-		(frame->fmt->pixelformat == V4L2_PIX_FMT_NV61) ||
 		(frame->fmt->pixelformat == V4L2_PIX_FMT_YVU420) ||
-		(frame->fmt->pixelformat == V4L2_PIX_FMT_NV21) ||
 		(frame->fmt->pixelformat == V4L2_PIX_FMT_YVU420M))
 		swap(addr->cb, addr->cr);
 
@@ -934,6 +941,51 @@ static struct gsc_pix_max gsc_v_100_max = {
 	.target_rot_en_h	= 2016,
 };
 
+static struct gsc_pix_max gsc_v_5250_max = {
+	.org_scaler_bypass_w	= 8192,
+	.org_scaler_bypass_h	= 8192,
+	.org_scaler_input_w	= 4800,
+	.org_scaler_input_h	= 3344,
+	.real_rot_dis_w		= 4800,
+	.real_rot_dis_h		= 3344,
+	.real_rot_en_w		= 2016,
+	.real_rot_en_h		= 2016,
+	.target_rot_dis_w	= 4800,
+	.target_rot_dis_h	= 3344,
+	.target_rot_en_w	= 2016,
+	.target_rot_en_h	= 2016,
+};
+
+static struct gsc_pix_max gsc_v_5420_max = {
+	.org_scaler_bypass_w	= 8192,
+	.org_scaler_bypass_h	= 8192,
+	.org_scaler_input_w	= 4800,
+	.org_scaler_input_h	= 3344,
+	.real_rot_dis_w		= 4800,
+	.real_rot_dis_h		= 3344,
+	.real_rot_en_w		= 2048,
+	.real_rot_en_h		= 2048,
+	.target_rot_dis_w	= 4800,
+	.target_rot_dis_h	= 3344,
+	.target_rot_en_w	= 2016,
+	.target_rot_en_h	= 2016,
+};
+
+static struct gsc_pix_max gsc_v_5433_max = {
+	.org_scaler_bypass_w	= 8192,
+	.org_scaler_bypass_h	= 8192,
+	.org_scaler_input_w	= 4800,
+	.org_scaler_input_h	= 3344,
+	.real_rot_dis_w		= 4800,
+	.real_rot_dis_h		= 3344,
+	.real_rot_en_w		= 2047,
+	.real_rot_en_h		= 2047,
+	.target_rot_dis_w	= 4800,
+	.target_rot_dis_h	= 3344,
+	.target_rot_en_w	= 2016,
+	.target_rot_en_h	= 2016,
+};
+
 static struct gsc_pix_min gsc_v_100_min = {
 	.org_w			= 64,
 	.org_h			= 32,
@@ -968,6 +1020,45 @@ static struct gsc_variant gsc_v_100_variant = {
 	.local_sc_down		= 2,
 };
 
+static struct gsc_variant gsc_v_5250_variant = {
+	.pix_max		= &gsc_v_5250_max,
+	.pix_min		= &gsc_v_100_min,
+	.pix_align		= &gsc_v_100_align,
+	.in_buf_cnt		= 32,
+	.out_buf_cnt		= 32,
+	.sc_up_max		= 8,
+	.sc_down_max		= 16,
+	.poly_sc_down_max	= 4,
+	.pre_sc_down_max	= 4,
+	.local_sc_down		= 2,
+};
+
+static struct gsc_variant gsc_v_5420_variant = {
+	.pix_max		= &gsc_v_5420_max,
+	.pix_min		= &gsc_v_100_min,
+	.pix_align		= &gsc_v_100_align,
+	.in_buf_cnt		= 32,
+	.out_buf_cnt		= 32,
+	.sc_up_max		= 8,
+	.sc_down_max		= 16,
+	.poly_sc_down_max	= 4,
+	.pre_sc_down_max	= 4,
+	.local_sc_down		= 2,
+};
+
+static struct gsc_variant gsc_v_5433_variant = {
+	.pix_max		= &gsc_v_5433_max,
+	.pix_min		= &gsc_v_100_min,
+	.pix_align		= &gsc_v_100_align,
+	.in_buf_cnt		= 32,
+	.out_buf_cnt		= 32,
+	.sc_up_max		= 8,
+	.sc_down_max		= 16,
+	.poly_sc_down_max	= 4,
+	.pre_sc_down_max	= 4,
+	.local_sc_down		= 2,
+};
+
 static struct gsc_driverdata gsc_v_100_drvdata = {
 	.variant = {
 		[0] = &gsc_v_100_variant,
@@ -980,11 +1071,33 @@ static struct gsc_driverdata gsc_v_100_drvdata = {
 	.num_clocks = 1,
 };
 
+static struct gsc_driverdata gsc_v_5250_drvdata = {
+	.variant = {
+		[0] = &gsc_v_5250_variant,
+		[1] = &gsc_v_5250_variant,
+		[2] = &gsc_v_5250_variant,
+		[3] = &gsc_v_5250_variant,
+	},
+	.num_entities = 4,
+	.clk_names = { "gscl" },
+	.num_clocks = 1,
+};
+
+static struct gsc_driverdata gsc_v_5420_drvdata = {
+	.variant = {
+		[0] = &gsc_v_5420_variant,
+		[1] = &gsc_v_5420_variant,
+	},
+	.num_entities = 2,
+	.clk_names = { "gscl" },
+	.num_clocks = 1,
+};
+
 static struct gsc_driverdata gsc_5433_drvdata = {
 	.variant = {
-		[0] = &gsc_v_100_variant,
-		[1] = &gsc_v_100_variant,
-		[2] = &gsc_v_100_variant,
+		[0] = &gsc_v_5433_variant,
+		[1] = &gsc_v_5433_variant,
+		[2] = &gsc_v_5433_variant,
 	},
 	.num_entities = 3,
 	.clk_names = { "pclk", "aclk", "aclk_xiu", "aclk_gsclbend" },
@@ -993,12 +1106,20 @@ static struct gsc_driverdata gsc_5433_drvdata = {
 
 static const struct of_device_id exynos_gsc_match[] = {
 	{
-		.compatible = "samsung,exynos5-gsc",
-		.data = &gsc_v_100_drvdata,
+		.compatible = "samsung,exynos5250-gsc",
+		.data = &gsc_v_5250_drvdata,
+	},
+	{
+		.compatible = "samsung,exynos5420-gsc",
+		.data = &gsc_v_5420_drvdata,
 	},
 	{
 		.compatible = "samsung,exynos5433-gsc",
 		.data = &gsc_5433_drvdata,
+	},
+	{
+		.compatible = "samsung,exynos5-gsc",
+		.data = &gsc_v_100_drvdata,
 	},
 	{},
 };
@@ -1020,6 +1141,9 @@ static int gsc_probe(struct platform_device *pdev)
 	ret = of_alias_get_id(pdev->dev.of_node, "gsc");
 	if (ret < 0)
 		return ret;
+
+	if (drv_data == &gsc_v_100_drvdata)
+		dev_info(dev, "compatible 'exynos5-gsc' is deprecated\n");
 
 	gsc->id = ret;
 	if (gsc->id >= drv_data->num_entities) {
@@ -1118,6 +1242,7 @@ static int gsc_remove(struct platform_device *pdev)
 		clk_disable_unprepare(gsc->clock[i]);
 
 	pm_runtime_put_noidle(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
 
 	dev_dbg(&pdev->dev, "%s driver unloaded\n", pdev->name);
 	return 0;

@@ -1,11 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * ARCv2 ISA based core Low Level Intr/Traps/Exceptions(non-TLB) Handling
  *
  * Copyright (C) 2013 Synopsys, Inc. (www.synopsys.com)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/linkage.h>   /* ARC_{EXTRY,EXIT} */
@@ -13,6 +10,11 @@
 #include <asm/errno.h>
 #include <asm/arcregs.h>
 #include <asm/irqflags.h>
+
+; A maximum number of supported interrupts in the core interrupt controller.
+; This number is not equal to the maximum interrupt number (256) because
+; first 16 lines are reserved for exceptions and are not configurable.
+#define NR_CPU_IRQS	240
 
 	.cpu HS
 
@@ -52,7 +54,7 @@ VECTOR	handle_interrupt	; unused
 VECTOR	handle_interrupt	; (23) unused
 # End of fixed IRQs
 
-.rept CONFIG_ARC_NUMBER_OF_INTERRUPTS - 8
+.rept NR_CPU_IRQS - 8
 	VECTOR	handle_interrupt
 .endr
 
@@ -95,15 +97,21 @@ END(handle_interrupt)
 ;################### Non TLB Exception Handling #############################
 
 ENTRY(EV_SWI)
-	flag 1
+	; TODO: implement this
+	EXCEPTION_PROLOGUE
+	b   ret_from_exception
 END(EV_SWI)
 
 ENTRY(EV_DivZero)
-	flag 1
+	; TODO: implement this
+	EXCEPTION_PROLOGUE
+	b   ret_from_exception
 END(EV_DivZero)
 
 ENTRY(EV_DCError)
-	flag 1
+	; TODO: implement this
+	EXCEPTION_PROLOGUE
+	b   ret_from_exception
 END(EV_DCError)
 
 ; ---------------------------------------------
@@ -198,7 +206,9 @@ restore_regs:
 ;####### Return from Intr #######
 
 debug_marker_l1:
-	bbit1.nt r0, STATUS_DE_BIT, .Lintr_ret_to_delay_slot
+	; bbit1.nt r0, STATUS_DE_BIT, .Lintr_ret_to_delay_slot
+	btst	r0, STATUS_DE_BIT		; Z flag set if bit clear
+	bnz	.Lintr_ret_to_delay_slot	; branch if STATUS_DE_BIT set
 
 .Lisr_ret_fast_path:
 	; Handle special case #1: (Entry via Exception, Return via IRQ)

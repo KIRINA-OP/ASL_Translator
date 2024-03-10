@@ -1,22 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *  FUJITSU Extended Socket Network Device driver
  *  Copyright (c) 2015 FUJITSU LIMITED
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, see <http://www.gnu.org/licenses/>.
- *
- * The full GNU General Public License is included in this distribution in
- * the file called "COPYING".
- *
  */
 
 /* ethtool support for fjes */
@@ -175,16 +160,15 @@ static void fjes_get_drvinfo(struct net_device *netdev,
 		 "platform:%s", plat_dev->name);
 }
 
-static int fjes_get_settings(struct net_device *netdev,
-			     struct ethtool_cmd *ecmd)
+static int fjes_get_link_ksettings(struct net_device *netdev,
+				   struct ethtool_link_ksettings *ecmd)
 {
-	ecmd->supported = 0;
-	ecmd->advertising = 0;
-	ecmd->duplex = DUPLEX_FULL;
-	ecmd->autoneg = AUTONEG_DISABLE;
-	ecmd->transceiver = XCVR_DUMMY1;
-	ecmd->port = PORT_NONE;
-	ethtool_cmd_speed_set(ecmd, 20000);	/* 20Gb/s */
+	ethtool_link_ksettings_zero_link_mode(ecmd, supported);
+	ethtool_link_ksettings_zero_link_mode(ecmd, advertising);
+	ecmd->base.duplex = DUPLEX_FULL;
+	ecmd->base.autoneg = AUTONEG_DISABLE;
+	ecmd->base.port = PORT_NONE;
+	ecmd->base.speed = 20000;	/* 20Gb/s */
 
 	return 0;
 }
@@ -296,7 +280,6 @@ static int fjes_get_dump_data(struct net_device *netdev,
 }
 
 static const struct ethtool_ops fjes_ethtool_ops = {
-		.get_settings		= fjes_get_settings,
 		.get_drvinfo		= fjes_get_drvinfo,
 		.get_ethtool_stats = fjes_get_ethtool_stats,
 		.get_strings      = fjes_get_strings,
@@ -306,6 +289,7 @@ static const struct ethtool_ops fjes_ethtool_ops = {
 		.set_dump		= fjes_set_dump,
 		.get_dump_flag		= fjes_get_dump_flag,
 		.get_dump_data		= fjes_get_dump_data,
+		.get_link_ksettings	= fjes_get_link_ksettings,
 };
 
 void fjes_set_ethtool_ops(struct net_device *netdev)

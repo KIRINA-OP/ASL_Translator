@@ -1,20 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016 Icenowy Zheng <icenowy@aosc.xyz>
  *
  * Based on ccu-sun8i-h3.c, which is:
  * Copyright (c) 2016 Maxime Ripard. All rights reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/clk-provider.h>
+#include <linux/io.h>
 #include <linux/of_address.h>
 
 #include "ccu_common.h"
@@ -124,14 +117,17 @@ static SUNXI_CCU_NK_WITH_GATE_LOCK_POSTDIV(pll_periph1_clk, "pll-periph1",
 					   0);
 
 static const char * const cpu_parents[] = { "osc32k", "osc24M",
-					     "pll-cpu" , "pll-cpu" };
+					     "pll-cpu", "pll-cpu" };
 static SUNXI_CCU_MUX(cpu_clk, "cpu", cpu_parents,
 		     0x050, 16, 2, CLK_IS_CRITICAL);
 
 static SUNXI_CCU_M(axi_clk, "axi", "cpu", 0x050, 0, 2, 0);
 
 static const char * const ahb1_parents[] = { "osc32k", "osc24M",
-					     "axi" , "pll-periph0" };
+					     "axi", "pll-periph0" };
+static const struct ccu_mux_var_prediv ahb1_predivs[] = {
+	{ .index = 3, .shift = 6, .width = 2 },
+};
 static struct ccu_div ahb1_clk = {
 	.div		= _SUNXI_CCU_DIV_FLAGS(4, 2, CLK_DIVIDER_POWER_OF_TWO),
 
@@ -139,11 +135,8 @@ static struct ccu_div ahb1_clk = {
 		.shift	= 12,
 		.width	= 2,
 
-		.variable_prediv	= {
-			.index	= 3,
-			.shift	= 6,
-			.width	= 2,
-		},
+		.var_predivs	= ahb1_predivs,
+		.n_var_predivs	= ARRAY_SIZE(ahb1_predivs),
 	},
 
 	.common		= {
@@ -167,14 +160,14 @@ static SUNXI_CCU_DIV_TABLE(apb1_clk, "apb1", "ahb1",
 			   0x054, 8, 2, apb1_div_table, 0);
 
 static const char * const apb2_parents[] = { "osc32k", "osc24M",
-					     "pll-periph0" , "pll-periph0" };
+					     "pll-periph0", "pll-periph0" };
 static SUNXI_CCU_MP_WITH_MUX(apb2_clk, "apb2", apb2_parents, 0x058,
 			     0, 5,	/* M */
 			     16, 2,	/* P */
 			     24, 2,	/* mux */
 			     0);
 
-static const char * const ahb2_parents[] = { "ahb1" , "pll-periph0" };
+static const char * const ahb2_parents[] = { "ahb1", "pll-periph0" };
 static const struct ccu_mux_fixed_prediv ahb2_fixed_predivs[] = {
 	{ .index = 1, .div = 2 },
 };
@@ -325,7 +318,8 @@ static SUNXI_CCU_GATE(dram_ohci_clk,	"dram-ohci",	"dram",
 
 static const char * const de_parents[] = { "pll-video", "pll-periph0" };
 static SUNXI_CCU_M_WITH_MUX_GATE(de_clk, "de", de_parents,
-				 0x104, 0, 4, 24, 2, BIT(31), 0);
+				 0x104, 0, 4, 24, 2, BIT(31),
+				 CLK_SET_RATE_PARENT);
 
 static const char * const tcon_parents[] = { "pll-video" };
 static SUNXI_CCU_M_WITH_MUX_GATE(tcon_clk, "tcon", tcon_parents,
@@ -354,7 +348,8 @@ static SUNXI_CCU_GATE(ac_dig_clk,	"ac-dig",	"pll-audio",
 static SUNXI_CCU_GATE(avs_clk,		"avs",		"osc24M",
 		      0x144, BIT(31), 0);
 
-static const char * const mbus_parents[] = { "osc24M", "pll-periph0-2x", "pll-ddr" };
+static const char * const mbus_parents[] = { "osc24M", "pll-periph0-2x",
+					     "pll-ddr" };
 static SUNXI_CCU_M_WITH_MUX_GATE(mbus_clk, "mbus", mbus_parents,
 				 0x15c, 0, 3, 24, 2, BIT(31), CLK_IS_CRITICAL);
 
@@ -536,12 +531,12 @@ static struct ccu_reset_map sun8i_v3s_ccu_resets[] = {
 	[RST_BUS_EMAC]		=  { 0x2c0, BIT(17) },
 	[RST_BUS_HSTIMER]	=  { 0x2c0, BIT(19) },
 	[RST_BUS_SPI0]		=  { 0x2c0, BIT(20) },
-	[RST_BUS_OTG]		=  { 0x2c0, BIT(23) },
+	[RST_BUS_OTG]		=  { 0x2c0, BIT(24) },
 	[RST_BUS_EHCI0]		=  { 0x2c0, BIT(26) },
 	[RST_BUS_OHCI0]		=  { 0x2c0, BIT(29) },
 
 	[RST_BUS_VE]		=  { 0x2c4, BIT(0) },
-	[RST_BUS_TCON0]		=  { 0x2c4, BIT(3) },
+	[RST_BUS_TCON0]		=  { 0x2c4, BIT(4) },
 	[RST_BUS_CSI]		=  { 0x2c4, BIT(8) },
 	[RST_BUS_DE]		=  { 0x2c4, BIT(12) },
 	[RST_BUS_DBG]		=  { 0x2c4, BIT(31) },
@@ -574,8 +569,7 @@ static void __init sun8i_v3s_ccu_setup(struct device_node *node)
 
 	reg = of_io_request_and_map(node, 0, of_node_full_name(node));
 	if (IS_ERR(reg)) {
-		pr_err("%s: Could not map the clock registers\n",
-		       of_node_full_name(node));
+		pr_err("%pOF: Could not map the clock registers\n", node);
 		return;
 	}
 

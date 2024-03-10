@@ -1,7 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  *
  * Generic part shared by ipv4 and ipv6 backends.
  */
@@ -24,7 +22,8 @@ const struct nla_policy nft_fib_policy[NFTA_FIB_MAX + 1] = {
 EXPORT_SYMBOL(nft_fib_policy);
 
 #define NFTA_FIB_F_ALL (NFTA_FIB_F_SADDR | NFTA_FIB_F_DADDR | \
-			NFTA_FIB_F_MARK | NFTA_FIB_F_IIF | NFTA_FIB_F_OIF)
+			NFTA_FIB_F_MARK | NFTA_FIB_F_IIF | NFTA_FIB_F_OIF | \
+			NFTA_FIB_F_PRESENT)
 
 int nft_fib_validate(const struct nft_ctx *ctx, const struct nft_expr *expr,
 		     const struct nft_data **data)
@@ -112,7 +111,7 @@ int nft_fib_init(const struct nft_ctx *ctx, const struct nft_expr *expr,
 	if (err < 0)
 		return err;
 
-	return nft_fib_validate(ctx, expr, NULL);
+	return 0;
 }
 EXPORT_SYMBOL_GPL(nft_fib_init);
 
@@ -133,19 +132,22 @@ int nft_fib_dump(struct sk_buff *skb, const struct nft_expr *expr)
 }
 EXPORT_SYMBOL_GPL(nft_fib_dump);
 
-void nft_fib_store_result(void *reg, enum nft_fib_result r,
-			  const struct nft_pktinfo *pkt, int index)
+void nft_fib_store_result(void *reg, const struct nft_fib *priv,
+			  const struct net_device *dev)
 {
-	struct net_device *dev;
 	u32 *dreg = reg;
+	int index;
 
-	switch (r) {
+	switch (priv->result) {
 	case NFT_FIB_RESULT_OIF:
-		*dreg = index;
+		index = dev ? dev->ifindex : 0;
+		*dreg = (priv->flags & NFTA_FIB_F_PRESENT) ? !!index : index;
 		break;
 	case NFT_FIB_RESULT_OIFNAME:
-		dev = dev_get_by_index_rcu(nft_net(pkt), index);
-		strncpy(reg, dev ? dev->name : "", IFNAMSIZ);
+		if (priv->flags & NFTA_FIB_F_PRESENT)
+			*dreg = !!dev;
+		else
+			strncpy(reg, dev ? dev->name : "", IFNAMSIZ);
 		break;
 	default:
 		WARN_ON_ONCE(1);

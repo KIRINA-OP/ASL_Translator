@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * INET		An implementation of the TCP/IP protocol suite for the LINUX
  *		operating system.  INET is implemented using the BSD Socket
@@ -15,11 +16,6 @@
  *			Mark Evans, <evansmp@uhura.aston.ac.uk>
  *			Florian La Roche, <rzsfl@rz.uni-sb.de>
  *			Alan Cox, <gw4pts@gw4pts.ampr.org>
- *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  *	Changes
  *		Alan Cox		:	New arp/rebuild header
@@ -58,7 +54,7 @@ static int fddi_header(struct sk_buff *skb, struct net_device *dev,
 
 	if(type != ETH_P_IP && type != ETH_P_IPV6 && type != ETH_P_ARP)
 		hl=FDDI_K_8022_HLEN-3;
-	fddi = (struct fddihdr *)skb_push(skb, hl);
+	fddi = skb_push(skb, hl);
 	fddi->fc			 = FDDI_FC_K_ASYNC_LLC_DEF;
 	if(type == ETH_P_IP || type == ETH_P_IPV6 || type == ETH_P_ARP)
 	{

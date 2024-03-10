@@ -17,68 +17,68 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/kernel.h>
+ #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/input.h>
 #include <linux/input-polldev.h>
 #include <linux/input/touchscreen.h>
 #include <linux/i2c.h>
 
-/* polling interval in ms */
+ /* polling interval in ms */
 #define POLL_INTERVAL	30
 
-/* this driver uses 12-bit readout */
+ /* this driver uses 12-bit readout */
 #define MAX_12BIT	0xfff
 
-#define NS2009_TS_NAME	"ns2009_ts"
+ #define NS2009_TS_NAME	"ns2009_ts"
 
-#define NS2009_READ_X_LOW_POWER_12BIT	0xc0
+ #define NS2009_READ_X_LOW_POWER_12BIT	0xc0
 #define NS2009_READ_Y_LOW_POWER_12BIT	0xd0
 #define NS2009_READ_Z1_LOW_POWER_12BIT	0xe0
 #define NS2009_READ_Z2_LOW_POWER_12BIT	0xf0
 
-#define NS2009_DEF_X_FUZZ	32
+ #define NS2009_DEF_X_FUZZ	32
 #define NS2009_DEF_Y_FUZZ	16
 
-/*
+ /*
  * The chip have some error in z1 value when pen is up, so the data read out
  * is sometimes not accurately 0.
  * This value is based on experiements.
  */
 #define NS2009_PEN_UP_Z1_ERR	80
 
-struct ns2009_data {
+ struct ns2009_data {
 	struct i2c_client		*client;
 	struct input_dev		*input;
 
-	struct touchscreen_properties	prop;
+ 	struct touchscreen_properties	prop;
 
-	bool				pen_down;
+ 	bool				pen_down;
 };
 
-static int ns2009_ts_read_data(struct ns2009_data *data, u8 cmd, u16 *val)
+ static int ns2009_ts_read_data(struct ns2009_data *data, u8 cmd, u16 *val)
 {
 	u8 raw_data[2];
 	int error;
 
-	error = i2c_smbus_read_i2c_block_data(data->client, cmd, 2, raw_data);
+ 	error = i2c_smbus_read_i2c_block_data(data->client, cmd, 2, raw_data);
 	if (error < 0)
 		return error;
 
-	if (unlikely(raw_data[1] & 0xf))
+ 	if (unlikely(raw_data[1] & 0xf))
 		return -EINVAL;
 
-	*val = (raw_data[0] << 4) | (raw_data[1] >> 4);
+ 	*val = (raw_data[0] << 4) | (raw_data[1] >> 4);
 
-	return 0;
+ 	return 0;
 }
 
-static int ns2009_ts_report(struct ns2009_data *data)
+ static int ns2009_ts_report(struct ns2009_data *data)
 {
 	u16 x, y, z1;
 	int ret;
 
-	/*
+ 	/*
 	 * NS2009 chip supports pressure measurement, but currently it needs
 	 * more investigation, so we only use z1 axis to detect pen down
 	 * here.
@@ -87,23 +87,23 @@ static int ns2009_ts_report(struct ns2009_data *data)
 	if (ret)
 		return ret;
 
-	if (z1 >= NS2009_PEN_UP_Z1_ERR) {
+ 	if (z1 >= NS2009_PEN_UP_Z1_ERR) {
 		ret = ns2009_ts_read_data(data, NS2009_READ_X_LOW_POWER_12BIT,
 					  &x);
 		if (ret)
 			return ret;
 
-		ret = ns2009_ts_read_data(data, NS2009_READ_Y_LOW_POWER_12BIT,
+ 		ret = ns2009_ts_read_data(data, NS2009_READ_Y_LOW_POWER_12BIT,
 					  &y);
 		if (ret)
 			return ret;
 
-		if (!data->pen_down) {
+ 		if (!data->pen_down) {
 			input_report_key(data->input, BTN_TOUCH, 1);
 			data->pen_down = true;
 		}
 
-		input_report_abs(data->input, ABS_X, x);
+ 		input_report_abs(data->input, ABS_X, x);
 		input_report_abs(data->input, ABS_Y, y);
 		input_sync(data->input);
 	} else if (data->pen_down) {
@@ -114,37 +114,37 @@ static int ns2009_ts_report(struct ns2009_data *data)
 	return 0;
 }
 
-static void ns2009_ts_poll(struct input_polled_dev *dev)
+ static void ns2009_ts_poll(struct input_polled_dev *dev)
 {
 	struct ns2009_data *data = dev->private;
 	int ret;
 
-	ret = ns2009_ts_report(data);
+ 	ret = ns2009_ts_report(data);
 	if (ret)
 		dev_err(&dev->input->dev, "Poll touch data failed: %d\n", ret);
 }
 
-static void ns2009_ts_config_input_dev(struct ns2009_data *data)
+ static void ns2009_ts_config_input_dev(struct ns2009_data *data)
 {
 	struct input_dev *input = data->input;
 
-	input_set_abs_params(input, ABS_X, 0, MAX_12BIT, NS2009_DEF_X_FUZZ, 0);
+ 	input_set_abs_params(input, ABS_X, 0, MAX_12BIT, NS2009_DEF_X_FUZZ, 0);
 	input_set_abs_params(input, ABS_Y, 0, MAX_12BIT, NS2009_DEF_Y_FUZZ, 0);
 	touchscreen_parse_properties(input, false, &data->prop);
 
-	input->name = NS2009_TS_NAME;
+ 	input->name = NS2009_TS_NAME;
 	input->phys = "input/ts";
 	input->id.bustype = BUS_I2C;
 	input_set_capability(input, EV_KEY, BTN_TOUCH);
 }
 
-static int ns2009_ts_request_polled_input_dev(struct ns2009_data *data)
+ static int ns2009_ts_request_polled_input_dev(struct ns2009_data *data)
 {
 	struct device *dev = &data->client->dev;
 	struct input_polled_dev *polled_dev;
 	int error;
 
-	polled_dev = devm_input_allocate_polled_device(dev);
+ 	polled_dev = devm_input_allocate_polled_device(dev);
 	if (!polled_dev) {
 		dev_err(dev,
 			"Failed to allocate polled input device\n");
@@ -152,29 +152,29 @@ static int ns2009_ts_request_polled_input_dev(struct ns2009_data *data)
 	}
 	data->input = polled_dev->input;
 
-	ns2009_ts_config_input_dev(data);
+ 	ns2009_ts_config_input_dev(data);
 	polled_dev->private = data;
 	polled_dev->poll = ns2009_ts_poll;
 	polled_dev->poll_interval = POLL_INTERVAL;
 
-	error = input_register_polled_device(polled_dev);
+ 	error = input_register_polled_device(polled_dev);
 	if (error) {
 		dev_err(dev, "Failed to register polled input device: %d\n",
 			error);
 		return error;
 	}
 
-	return 0;
+ 	return 0;
 }
 
-static int ns2009_ts_probe(struct i2c_client *client,
+ static int ns2009_ts_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
 	struct ns2009_data *data;
 	struct device *dev = &client->dev;
 	int error;
 
-	if (!i2c_check_functionality(client->adapter,
+ 	if (!i2c_check_functionality(client->adapter,
 				     I2C_FUNC_I2C |
 				     I2C_FUNC_SMBUS_READ_I2C_BLOCK |
 				     I2C_FUNC_SMBUS_WRITE_I2C_BLOCK)) {
@@ -182,27 +182,27 @@ static int ns2009_ts_probe(struct i2c_client *client,
 		return -ENXIO;
 	}
 
-	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
+ 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
-	i2c_set_clientdata(client, data);
+ 	i2c_set_clientdata(client, data);
 	data->client = client;
 
-	error = ns2009_ts_request_polled_input_dev(data);
+ 	error = ns2009_ts_request_polled_input_dev(data);
 	if (error)
 		return error;
 
-	return 0;
+ 	return 0;
 };
 
-static const struct i2c_device_id ns2009_ts_id[] = {
+ static const struct i2c_device_id ns2009_ts_id[] = {
 	{ "ns2009", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, ns2009_ts_id);
 
-static struct i2c_driver ns2009_ts_driver = {
+ static struct i2c_driver ns2009_ts_driver = {
 	.probe = ns2009_ts_probe,
 	.id_table = ns2009_ts_id,
 	.driver = {

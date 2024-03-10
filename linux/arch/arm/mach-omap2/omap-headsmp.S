@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Secondary CPU startup routine source file.
  *
@@ -9,14 +10,11 @@
  * Interface functions needed for the SMP. This file is based on arm
  * realview smp platform.
  * Copyright (c) 2003 ARM Limited.
- *
- * This program is free software,you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/linkage.h>
 #include <linux/init.h>
+#include <asm/assembler.h>
 
 #include "omap44xx.h"
 
@@ -66,7 +64,7 @@ wait_2:	ldr	r2, =AUX_CORE_BOOT0_PA	@ read from AuxCoreBoot0
 	cmp	r0, r4
 	bne	wait_2
 	ldr	r12, =API_HYP_ENTRY
-	adr	r0, hyp_boot
+	badr	r0, hyp_boot
 	smc	#0
 hyp_boot:
 	b	omap_secondary_startup

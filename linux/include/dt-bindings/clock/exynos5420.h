@@ -1,13 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2013 Samsung Electronics Co., Ltd.
  * Author: Andrzej Hajda <a.hajda@samsung.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
  * Device Tree binding constants for Exynos5420 clock controller.
-*/
+ */
 
 #ifndef _DT_BINDINGS_CLOCK_EXYNOS_5420_H
 #define _DT_BINDINGS_CLOCK_EXYNOS_5420_H
@@ -217,6 +214,9 @@
 #define CLK_MOUT_MCLK_CDREX	654
 #define CLK_MOUT_BPLL		655
 #define CLK_MOUT_MX_MSPLL_CCORE	656
+#define CLK_MOUT_EPLL		657
+#define CLK_MOUT_MAU_EPLL	658
+#define CLK_MOUT_USER_MAU_EPLL	659
 
 /* divider clocks */
 #define CLK_DOUT_PIXEL		768

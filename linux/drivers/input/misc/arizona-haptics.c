@@ -1,13 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Arizona haptics driver
  *
  * Copyright 2012 Wolfson Microelectronics plc
  *
  * Author: Mark Brown <broonie@opensource.wolfsonmicro.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/module.h>
@@ -200,8 +197,6 @@ static int arizona_haptics_probe(struct platform_device *pdev)
 			ret);
 		return ret;
 	}
-
-	platform_set_drvdata(pdev, haptics);
 
 	return 0;
 }

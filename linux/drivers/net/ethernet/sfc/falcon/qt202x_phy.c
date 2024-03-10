@@ -1,10 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /****************************************************************************
  * Driver for Solarflare network controllers and boards
  * Copyright 2006-2012 Solarflare Communications Inc.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation, incorporated herein by reference.
  */
 /*
  * Driver for AMCC QT202x SFP+ and XFP adapters; see www.amcc.com for details
@@ -437,9 +434,10 @@ static int qt202x_phy_reconfigure(struct ef4_nic *efx)
 	return 0;
 }
 
-static void qt202x_phy_get_settings(struct ef4_nic *efx, struct ethtool_cmd *ecmd)
+static void qt202x_phy_get_link_ksettings(struct ef4_nic *efx,
+					  struct ethtool_link_ksettings *cmd)
 {
-	mdio45_ethtool_gset(&efx->mdio, ecmd);
+	mdio45_ethtool_ksettings_get(&efx->mdio, cmd);
 }
 
 static void qt202x_phy_remove(struct ef4_nic *efx)
@@ -487,8 +485,8 @@ const struct ef4_phy_operations falcon_qt202x_phy_ops = {
 	.poll		 = qt202x_phy_poll,
 	.fini		 = ef4_port_dummy_op_void,
 	.remove		 = qt202x_phy_remove,
-	.get_settings	 = qt202x_phy_get_settings,
-	.set_settings	 = ef4_mdio_set_settings,
+	.get_link_ksettings = qt202x_phy_get_link_ksettings,
+	.set_link_ksettings = ef4_mdio_set_link_ksettings,
 	.test_alive	 = ef4_mdio_test_alive,
 	.get_module_eeprom = qt202x_phy_get_module_eeprom,
 	.get_module_info = qt202x_phy_get_module_info,

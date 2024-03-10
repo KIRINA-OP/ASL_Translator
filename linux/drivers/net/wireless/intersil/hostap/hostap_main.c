@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Host AP (software wireless LAN access point) driver for
  * Intersil Prism2/2.5/3 - hostap.o module, common routines
@@ -5,11 +6,6 @@
  * Copyright (c) 2001-2002, SSH Communications Security Corp and Jouni Malinen
  * <j@w1.fi>
  * Copyright (c) 2002-2005, Jouni Malinen <j@w1.fi>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation. See README and COPYING for
- * more details.
  */
 
 #include <linux/module.h>
@@ -73,7 +69,7 @@ struct net_device * hostap_add_interface(struct local_info *local,
 	dev->mem_end = mdev->mem_end;
 
 	hostap_setup_dev(dev, local, type);
-	dev->destructor = free_netdev;
+	dev->needs_free_netdev = true;
 
 	sprintf(dev->name, "%s%s", prefix, name);
 	if (!rtnl_locked)
@@ -125,8 +121,8 @@ void hostap_remove_interface(struct net_device *dev, int rtnl_locked,
 	else
 		unregister_netdev(dev);
 
-	/* dev->destructor = free_netdev() will free the device data, including
-	 * private data, when removing the device */
+	/* 'dev->needs_free_netdev = true' implies device data, including
+	 * private data, will be freed when the device is removed */
 }
 
 
@@ -690,7 +686,7 @@ static int prism2_open(struct net_device *dev)
 		/* Master radio interface is needed for all operation, so open
 		 * it automatically when any virtual net_device is opened. */
 		local->master_dev_auto_open = 1;
-		dev_open(local->dev);
+		dev_open(local->dev, NULL);
 	}
 
 	netif_device_attach(dev);
@@ -1039,15 +1035,13 @@ int prism2_sta_send_mgmt(local_info_t *local, u8 *dst, u16 stype,
 	if (skb == NULL)
 		return -ENOMEM;
 
-	mgmt = (struct hostap_ieee80211_mgmt *)
-		skb_put(skb, IEEE80211_MGMT_HDR_LEN);
-	memset(mgmt, 0, IEEE80211_MGMT_HDR_LEN);
+	mgmt = skb_put_zero(skb, IEEE80211_MGMT_HDR_LEN);
 	mgmt->frame_control = cpu_to_le16(IEEE80211_FTYPE_MGMT | stype);
 	memcpy(mgmt->da, dst, ETH_ALEN);
 	memcpy(mgmt->sa, dev->dev_addr, ETH_ALEN);
 	memcpy(mgmt->bssid, dst, ETH_ALEN);
 	if (body)
-		memcpy(skb_put(skb, bodylen), body, bodylen);
+		skb_put_data(skb, body, bodylen);
 
 	meta = (struct hostap_skb_tx_data *) skb->cb;
 	memset(meta, 0, sizeof(*meta));

@@ -1,10 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * QLogic iSCSI Offload Driver
  * Copyright (c) 2016 Cavium Inc.
- *
- * This software is available under the terms of the GNU General Public License
- * (GPL) Version 2, available from the file COPYING in the main directory of
- * this source tree.
  */
 
 #include "qedi_dbg.h"
@@ -16,10 +13,6 @@ qedi_dbg_err(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 {
 	va_list va;
 	struct va_format vaf;
-	char nfunc[32];
-
-	memset(nfunc, 0, sizeof(nfunc));
-	memcpy(nfunc, func, sizeof(nfunc) - 1);
 
 	va_start(va, fmt);
 
@@ -28,9 +21,9 @@ qedi_dbg_err(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 
 	if (likely(qedi) && likely(qedi->pdev))
 		pr_err("[%s]:[%s:%d]:%d: %pV", dev_name(&qedi->pdev->dev),
-		       nfunc, line, qedi->host_no, &vaf);
+		       func, line, qedi->host_no, &vaf);
 	else
-		pr_err("[0000:00:00.0]:[%s:%d]: %pV", nfunc, line, &vaf);
+		pr_err("[0000:00:00.0]:[%s:%d]: %pV", func, line, &vaf);
 
 	va_end(va);
 }
@@ -41,10 +34,6 @@ qedi_dbg_warn(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 {
 	va_list va;
 	struct va_format vaf;
-	char nfunc[32];
-
-	memset(nfunc, 0, sizeof(nfunc));
-	memcpy(nfunc, func, sizeof(nfunc) - 1);
 
 	va_start(va, fmt);
 
@@ -52,14 +41,15 @@ qedi_dbg_warn(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 	vaf.va = &va;
 
 	if (!(qedi_dbg_log & QEDI_LOG_WARN))
-		return;
+		goto ret;
 
 	if (likely(qedi) && likely(qedi->pdev))
 		pr_warn("[%s]:[%s:%d]:%d: %pV", dev_name(&qedi->pdev->dev),
-			nfunc, line, qedi->host_no, &vaf);
+			func, line, qedi->host_no, &vaf);
 	else
-		pr_warn("[0000:00:00.0]:[%s:%d]: %pV", nfunc, line, &vaf);
+		pr_warn("[0000:00:00.0]:[%s:%d]: %pV", func, line, &vaf);
 
+ret:
 	va_end(va);
 }
 
@@ -69,10 +59,6 @@ qedi_dbg_notice(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 {
 	va_list va;
 	struct va_format vaf;
-	char nfunc[32];
-
-	memset(nfunc, 0, sizeof(nfunc));
-	memcpy(nfunc, func, sizeof(nfunc) - 1);
 
 	va_start(va, fmt);
 
@@ -80,15 +66,16 @@ qedi_dbg_notice(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 	vaf.va = &va;
 
 	if (!(qedi_dbg_log & QEDI_LOG_NOTICE))
-		return;
+		goto ret;
 
 	if (likely(qedi) && likely(qedi->pdev))
 		pr_notice("[%s]:[%s:%d]:%d: %pV",
-			  dev_name(&qedi->pdev->dev), nfunc, line,
+			  dev_name(&qedi->pdev->dev), func, line,
 			  qedi->host_no, &vaf);
 	else
-		pr_notice("[0000:00:00.0]:[%s:%d]: %pV", nfunc, line, &vaf);
+		pr_notice("[0000:00:00.0]:[%s:%d]: %pV", func, line, &vaf);
 
+ret:
 	va_end(va);
 }
 
@@ -98,10 +85,6 @@ qedi_dbg_info(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 {
 	va_list va;
 	struct va_format vaf;
-	char nfunc[32];
-
-	memset(nfunc, 0, sizeof(nfunc));
-	memcpy(nfunc, func, sizeof(nfunc) - 1);
 
 	va_start(va, fmt);
 
@@ -109,14 +92,15 @@ qedi_dbg_info(struct qedi_dbg_ctx *qedi, const char *func, u32 line,
 	vaf.va = &va;
 
 	if (!(qedi_dbg_log & level))
-		return;
+		goto ret;
 
 	if (likely(qedi) && likely(qedi->pdev))
 		pr_info("[%s]:[%s:%d]:%d: %pV", dev_name(&qedi->pdev->dev),
-			nfunc, line, qedi->host_no, &vaf);
+			func, line, qedi->host_no, &vaf);
 	else
-		pr_info("[0000:00:00.0]:[%s:%d]: %pV", nfunc, line, &vaf);
+		pr_info("[0000:00:00.0]:[%s:%d]: %pV", func, line, &vaf);
 
+ret:
 	va_end(va);
 }
 

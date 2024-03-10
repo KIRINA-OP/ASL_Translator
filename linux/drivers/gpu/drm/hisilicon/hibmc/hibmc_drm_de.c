@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /* Hisilicon Hibmc SoC drm driver
  *
  * Based on the bochs drm driver.
@@ -8,18 +9,12 @@
  *	Rongrong Zou <zourongrong@huawei.com>
  *	Rongrong Zou <zourongrong@gmail.com>
  *	Jianhua Li <lijianhua@huawei.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
  */
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_crtc_helper.h>
 #include <drm/drm_plane_helper.h>
+#include <drm/drm_probe_helper.h>
 
 #include "hibmc_drm_drv.h"
 #include "hibmc_drm_regs.h"
@@ -122,11 +117,11 @@ static void hibmc_plane_atomic_update(struct drm_plane *plane,
 
 	writel(gpu_addr, priv->mmio + HIBMC_CRT_FB_ADDRESS);
 
-	reg = state->fb->width * (state->fb->bits_per_pixel / 8);
+	reg = state->fb->width * (state->fb->format->cpp[0]);
 	/* now line_pad is 16 */
 	reg = PADDING(16, reg);
 
-	line_l = state->fb->width * state->fb->bits_per_pixel / 8;
+	line_l = state->fb->width * state->fb->format->cpp[0];
 	line_l = PADDING(16, line_l);
 	writel(HIBMC_FIELD(HIBMC_CRT_FB_WIDTH_WIDTH, reg) |
 	       HIBMC_FIELD(HIBMC_CRT_FB_WIDTH_OFFS, line_l),
@@ -136,7 +131,7 @@ static void hibmc_plane_atomic_update(struct drm_plane *plane,
 	reg = readl(priv->mmio + HIBMC_CRT_DISP_CTL);
 	reg &= ~HIBMC_CRT_DISP_CTL_FORMAT_MASK;
 	reg |= HIBMC_FIELD(HIBMC_CRT_DISP_CTL_FORMAT,
-			   state->fb->bits_per_pixel / 16);
+			   state->fb->format->cpp[0] * 8 / 16);
 	writel(reg, priv->mmio + HIBMC_CRT_DISP_CTL);
 }
 
@@ -150,7 +145,6 @@ static const u32 channel_formats1[] = {
 static struct drm_plane_funcs hibmc_plane_funcs = {
 	.update_plane	= drm_atomic_helper_update_plane,
 	.disable_plane	= drm_atomic_helper_disable_plane,
-	.set_property = drm_atomic_helper_plane_set_property,
 	.destroy = drm_plane_cleanup,
 	.reset = drm_atomic_helper_plane_reset,
 	.atomic_duplicate_state = drm_atomic_helper_plane_duplicate_state,
@@ -181,6 +175,7 @@ static struct drm_plane *hibmc_plane_init(struct hibmc_drm_private *priv)
 	ret = drm_universal_plane_init(dev, plane, 1, &hibmc_plane_funcs,
 				       channel_formats1,
 				       ARRAY_SIZE(channel_formats1),
+				       NULL,
 				       DRM_PLANE_TYPE_PRIMARY,
 				       NULL);
 	if (ret) {
@@ -192,7 +187,8 @@ static struct drm_plane *hibmc_plane_init(struct hibmc_drm_private *priv)
 	return plane;
 }
 
-static void hibmc_crtc_enable(struct drm_crtc *crtc)
+static void hibmc_crtc_atomic_enable(struct drm_crtc *crtc,
+				     struct drm_crtc_state *old_state)
 {
 	unsigned int reg;
 	struct hibmc_drm_private *priv = crtc->dev->dev_private;
@@ -209,7 +205,8 @@ static void hibmc_crtc_enable(struct drm_crtc *crtc)
 	drm_crtc_vblank_on(crtc);
 }
 
-static void hibmc_crtc_disable(struct drm_crtc *crtc)
+static void hibmc_crtc_atomic_disable(struct drm_crtc *crtc,
+				      struct drm_crtc_state *old_state)
 {
 	unsigned int reg;
 	struct hibmc_drm_private *priv = crtc->dev->dev_private;
@@ -423,6 +420,24 @@ static void hibmc_crtc_atomic_flush(struct drm_crtc *crtc,
 	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
 }
 
+static int hibmc_crtc_enable_vblank(struct drm_crtc *crtc)
+{
+	struct hibmc_drm_private *priv = crtc->dev->dev_private;
+
+	writel(HIBMC_RAW_INTERRUPT_EN_VBLANK(1),
+	       priv->mmio + HIBMC_RAW_INTERRUPT_EN);
+
+	return 0;
+}
+
+static void hibmc_crtc_disable_vblank(struct drm_crtc *crtc)
+{
+	struct hibmc_drm_private *priv = crtc->dev->dev_private;
+
+	writel(HIBMC_RAW_INTERRUPT_EN_VBLANK(0),
+	       priv->mmio + HIBMC_RAW_INTERRUPT_EN);
+}
+
 static const struct drm_crtc_funcs hibmc_crtc_funcs = {
 	.page_flip = drm_atomic_helper_page_flip,
 	.set_config = drm_atomic_helper_set_config,
@@ -430,14 +445,16 @@ static const struct drm_crtc_funcs hibmc_crtc_funcs = {
 	.reset = drm_atomic_helper_crtc_reset,
 	.atomic_duplicate_state =  drm_atomic_helper_crtc_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_crtc_destroy_state,
+	.enable_vblank = hibmc_crtc_enable_vblank,
+	.disable_vblank = hibmc_crtc_disable_vblank,
 };
 
 static const struct drm_crtc_helper_funcs hibmc_crtc_helper_funcs = {
-	.enable		= hibmc_crtc_enable,
-	.disable	= hibmc_crtc_disable,
 	.mode_set_nofb	= hibmc_crtc_mode_set_nofb,
 	.atomic_begin	= hibmc_crtc_atomic_begin,
 	.atomic_flush	= hibmc_crtc_atomic_flush,
+	.atomic_enable	= hibmc_crtc_atomic_enable,
+	.atomic_disable	= hibmc_crtc_atomic_disable,
 };
 
 int hibmc_de_init(struct hibmc_drm_private *priv)

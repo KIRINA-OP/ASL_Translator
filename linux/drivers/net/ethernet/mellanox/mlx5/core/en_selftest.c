@@ -30,6 +30,7 @@
  * SOFTWARE.
  */
 
+#include <linux/prefetch.h>
 #include <linux/ip.h>
 #include <linux/udp.h>
 #include <net/udp.h>
@@ -63,7 +64,7 @@ static int mlx5e_test_health_info(struct mlx5e_priv *priv)
 {
 	struct mlx5_core_health *health = &priv->mdev->priv.health;
 
-	return health->sick ? 1 : 0;
+	return health->fatal_error ? 1 : 0;
 }
 
 static int mlx5e_test_link_state(struct mlx5e_priv *priv)
@@ -73,7 +74,7 @@ static int mlx5e_test_link_state(struct mlx5e_priv *priv)
 	if (!netif_carrier_ok(priv->netdev))
 		return 1;
 
-	port_state = mlx5_query_vport_state(priv->mdev, MLX5_QUERY_VPORT_STATE_IN_OP_MOD_VNIC_VPORT, 0);
+	port_state = mlx5_query_vport_state(priv->mdev, MLX5_VPORT_STATE_OP_MOD_VNIC_VPORT, 0);
 	return port_state == VPORT_STATE_UP ? 0 : 1;
 }
 
@@ -97,17 +98,16 @@ static int mlx5e_test_link_speed(struct mlx5e_priv *priv)
 	return 1;
 }
 
-#ifdef CONFIG_INET
-/* loopback test */
-#define MLX5E_TEST_PKT_SIZE (MLX5_MPWRQ_SMALL_PACKET_THRESHOLD - NET_IP_ALIGN)
-static const char mlx5e_test_text[ETH_GSTRING_LEN] = "MLX5E SELF TEST";
-#define MLX5E_TEST_MAGIC 0x5AEED15C001ULL
-
 struct mlx5ehdr {
 	__be32 version;
 	__be64 magic;
-	char   text[ETH_GSTRING_LEN];
 };
+
+#ifdef CONFIG_INET
+/* loopback test */
+#define MLX5E_TEST_PKT_SIZE (sizeof(struct ethhdr) + sizeof(struct iphdr) +\
+			     sizeof(struct udphdr) + sizeof(struct mlx5ehdr))
+#define MLX5E_TEST_MAGIC 0x5AEED15C001ULL
 
 static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
 {
@@ -116,10 +116,7 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
 	struct ethhdr *ethh;
 	struct udphdr *udph;
 	struct iphdr *iph;
-	int datalen, iplen;
-
-	datalen = MLX5E_TEST_PKT_SIZE -
-		  (sizeof(*ethh) + sizeof(*iph) + sizeof(*udph));
+	int    iplen;
 
 	skb = netdev_alloc_skb(priv->netdev, MLX5E_TEST_PKT_SIZE);
 	if (!skb) {
@@ -131,14 +128,14 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
 	skb_reserve(skb, NET_IP_ALIGN);
 
 	/*  Reserve for ethernet and IP header  */
-	ethh = (struct ethhdr *)skb_push(skb, ETH_HLEN);
+	ethh = skb_push(skb, ETH_HLEN);
 	skb_reset_mac_header(skb);
 
 	skb_set_network_header(skb, skb->len);
-	iph = (struct iphdr *)skb_put(skb, sizeof(struct iphdr));
+	iph = skb_put(skb, sizeof(struct iphdr));
 
 	skb_set_transport_header(skb, skb->len);
-	udph = (struct udphdr *)skb_put(skb, sizeof(struct udphdr));
+	udph = skb_put(skb, sizeof(struct udphdr));
 
 	/* Fill ETH header */
 	ether_addr_copy(ethh->h_dest, priv->netdev->dev_addr);
@@ -148,7 +145,7 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
 	/* Fill UDP header */
 	udph->source = htons(9);
 	udph->dest = htons(9); /* Discard Protocol */
-	udph->len = htons(datalen + sizeof(struct udphdr));
+	udph->len = htons(sizeof(struct mlx5ehdr) + sizeof(struct udphdr));
 	udph->check = 0;
 
 	/* Fill IP header */
@@ -156,7 +153,8 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
 	iph->ttl = 32;
 	iph->version = 4;
 	iph->protocol = IPPROTO_UDP;
-	iplen = sizeof(struct iphdr) + sizeof(struct udphdr) + datalen;
+	iplen = sizeof(struct iphdr) + sizeof(struct udphdr) +
+		sizeof(struct mlx5ehdr);
 	iph->tot_len = htons(iplen);
 	iph->frag_off = 0;
 	iph->saddr = 0;
@@ -166,12 +164,9 @@ static struct sk_buff *mlx5e_test_get_udp_skb(struct mlx5e_priv *priv)
 	ip_send_check(iph);
 
 	/* Fill test header and data */
-	mlxh = (struct mlx5ehdr *)skb_put(skb, sizeof(*mlxh));
+	mlxh = skb_put(skb, sizeof(*mlxh));
 	mlxh->version = 0;
 	mlxh->magic = cpu_to_be64(MLX5E_TEST_MAGIC);
-	strlcpy(mlxh->text, mlx5e_test_text, sizeof(mlxh->text));
-	datalen -= sizeof(*mlxh);
-	memset(skb_put(skb, datalen), 0, datalen);
 
 	skb->csum = 0;
 	skb->ip_summed = CHECKSUM_PARTIAL;
@@ -188,6 +183,7 @@ struct mlx5e_lbt_priv {
 	struct packet_type pt;
 	struct completion comp;
 	bool loopback_ok;
+	bool local_lb;
 };
 
 static int
@@ -203,9 +199,6 @@ mlx5e_test_loopback_validate(struct sk_buff *skb,
 	struct iphdr *iph;
 
 	/* We are only going to peek, no need to clone the SKB */
-	if (skb->protocol != htons(ETH_P_IP))
-		goto out;
-
 	if (MLX5E_TEST_PKT_SIZE - ETH_HLEN > skb_headlen(skb))
 		goto out;
 
@@ -217,7 +210,8 @@ mlx5e_test_loopback_validate(struct sk_buff *skb,
 	if (iph->protocol != IPPROTO_UDP)
 		goto out;
 
-	udph = udp_hdr(skb);
+	/* Don't assume skb_transport_header() was set */
+	udph = (struct udphdr *)((u8 *)iph + 4 * iph->ihl);
 	if (udph->dest != htons(9))
 		goto out;
 
@@ -238,29 +232,47 @@ static int mlx5e_test_loopback_setup(struct mlx5e_priv *priv,
 {
 	int err = 0;
 
-	err = mlx5e_refresh_tirs_self_loopback(priv->mdev, true);
-	if (err) {
-		netdev_err(priv->netdev,
-			   "\tFailed to enable UC loopback err(%d)\n", err);
+	/* Temporarily enable local_lb */
+	err = mlx5_nic_vport_query_local_lb(priv->mdev, &lbtp->local_lb);
+	if (err)
 		return err;
+
+	if (!lbtp->local_lb) {
+		err = mlx5_nic_vport_update_local_lb(priv->mdev, true);
+		if (err)
+			return err;
 	}
+
+	err = mlx5e_refresh_tirs(priv, true);
+	if (err)
+		goto out;
 
 	lbtp->loopback_ok = false;
 	init_completion(&lbtp->comp);
 
-	lbtp->pt.type = htons(ETH_P_ALL);
+	lbtp->pt.type = htons(ETH_P_IP);
 	lbtp->pt.func = mlx5e_test_loopback_validate;
 	lbtp->pt.dev = priv->netdev;
 	lbtp->pt.af_packet_priv = lbtp;
 	dev_add_pack(&lbtp->pt);
+
+	return 0;
+
+out:
+	if (!lbtp->local_lb)
+		mlx5_nic_vport_update_local_lb(priv->mdev, false);
+
 	return err;
 }
 
 static void mlx5e_test_loopback_cleanup(struct mlx5e_priv *priv,
 					struct mlx5e_lbt_priv *lbtp)
 {
+	if (!lbtp->local_lb)
+		mlx5_nic_vport_update_local_lb(priv->mdev, false);
+
 	dev_remove_pack(&lbtp->pt);
-	mlx5e_refresh_tirs_self_loopback(priv->mdev, false);
+	mlx5e_refresh_tirs(priv, false);
 }
 
 #define MLX5E_LB_VERIFY_TIMEOUT (msecs_to_jiffies(200))
@@ -272,7 +284,7 @@ static int mlx5e_test_loopback(struct mlx5e_priv *priv)
 
 	if (!test_bit(MLX5E_STATE_OPENED, &priv->state)) {
 		netdev_err(priv->netdev,
-			   "\tCan't perform loobpack test while device is down\n");
+			   "\tCan't perform loopback test while device is down\n");
 		return -ENODEV;
 	}
 

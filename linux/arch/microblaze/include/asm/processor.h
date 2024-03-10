@@ -46,12 +46,6 @@ extern void ret_from_kernel_thread(void);
 # define TASK_SIZE	(0x81000000 - 0x80000000)
 
 /*
- * Default implementation of macro that returns current
- * instruction pointer ("program counter").
- */
-# define current_text_addr() ({ __label__ _l; _l: &&_l; })
-
-/*
  * This decides where the kernel will search for a free chunk of vm
  * space during mmap's. We won't be using it
  */
@@ -68,8 +62,6 @@ struct thread_struct { };
 static inline void release_thread(struct task_struct *dead_task)
 {
 }
-
-extern unsigned long thread_saved_pc(struct task_struct *t);
 
 extern unsigned long get_wchan(struct task_struct *p);
 
@@ -94,12 +86,6 @@ extern unsigned long get_wchan(struct task_struct *p);
 
 #  ifndef __ASSEMBLY__
 
-/*
- * Default implementation of macro that returns current
- * instruction pointer ("program counter").
- */
-#  define current_text_addr()	({ __label__ _l; _l: &&_l; })
-
 /* If you change this, you must change the associated assembly-languages
  * constants defined below, THREAD_*.
  */
@@ -120,10 +106,6 @@ struct thread_struct {
 static inline void release_thread(struct task_struct *dead_task)
 {
 }
-
-/* Return saved (kernel) PC of a blocked thread.  */
-#  define thread_saved_pc(tsk)	\
-	((tsk)->thread.regs ? (tsk)->thread.regs->r15 : 0)
 
 unsigned long get_wchan(struct task_struct *p);
 

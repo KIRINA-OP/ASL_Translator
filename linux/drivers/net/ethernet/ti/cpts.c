@@ -1,22 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * TI Common Platform Time Sync
  *
  * Copyright (C) 2012 Richard Cochran <richardcochran@gmail.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
+#include <linux/clk-provider.h>
 #include <linux/err.h>
 #include <linux/if.h>
 #include <linux/hrtimer.h>
@@ -31,8 +20,17 @@
 
 #include "cpts.h"
 
+#define CPTS_SKB_TX_WORK_TIMEOUT 1 /* jiffies */
+
+struct cpts_skb_cb_data {
+	unsigned long tmo;
+};
+
 #define cpts_read32(c, r)	readl_relaxed(&c->reg->r)
 #define cpts_write32(c, v, r)	writel_relaxed(v, &c->reg->r)
+
+static int cpts_match(struct sk_buff *skb, unsigned int ptp_class,
+		      u16 ts_seqid, u8 ts_msgtype);
 
 static int event_expired(struct cpts_event *event)
 {
@@ -77,6 +75,67 @@ static int cpts_purge_events(struct cpts *cpts)
 	return removed ? 0 : -1;
 }
 
+static void cpts_purge_txq(struct cpts *cpts)
+{
+	struct cpts_skb_cb_data *skb_cb;
+	struct sk_buff *skb, *tmp;
+	int removed = 0;
+
+	skb_queue_walk_safe(&cpts->txq, skb, tmp) {
+		skb_cb = (struct cpts_skb_cb_data *)skb->cb;
+		if (time_after(jiffies, skb_cb->tmo)) {
+			__skb_unlink(skb, &cpts->txq);
+			dev_consume_skb_any(skb);
+			++removed;
+		}
+	}
+
+	if (removed)
+		dev_dbg(cpts->dev, "txq cleaned up %d\n", removed);
+}
+
+static bool cpts_match_tx_ts(struct cpts *cpts, struct cpts_event *event)
+{
+	struct sk_buff *skb, *tmp;
+	u16 seqid;
+	u8 mtype;
+	bool found = false;
+
+	mtype = (event->high >> MESSAGE_TYPE_SHIFT) & MESSAGE_TYPE_MASK;
+	seqid = (event->high >> SEQUENCE_ID_SHIFT) & SEQUENCE_ID_MASK;
+
+	/* no need to grab txq.lock as access is always done under cpts->lock */
+	skb_queue_walk_safe(&cpts->txq, skb, tmp) {
+		struct skb_shared_hwtstamps ssh;
+		unsigned int class = ptp_classify_raw(skb);
+		struct cpts_skb_cb_data *skb_cb =
+					(struct cpts_skb_cb_data *)skb->cb;
+
+		if (cpts_match(skb, class, seqid, mtype)) {
+			u64 ns = timecounter_cyc2time(&cpts->tc, event->low);
+
+			memset(&ssh, 0, sizeof(ssh));
+			ssh.hwtstamp = ns_to_ktime(ns);
+			skb_tstamp_tx(skb, &ssh);
+			found = true;
+			__skb_unlink(skb, &cpts->txq);
+			dev_consume_skb_any(skb);
+			dev_dbg(cpts->dev, "match tx timestamp mtype %u seqid %04x\n",
+				mtype, seqid);
+			break;
+		}
+
+		if (time_after(jiffies, skb_cb->tmo)) {
+			/* timeout any expired skbs over 1s */
+			dev_dbg(cpts->dev, "expiring tx timestamp from txq\n");
+			__skb_unlink(skb, &cpts->txq);
+			dev_consume_skb_any(skb);
+		}
+	}
+
+	return found;
+}
+
 /*
  * Returns zero if matching event type was found.
  */
@@ -101,9 +160,16 @@ static int cpts_fifo_read(struct cpts *cpts, int match)
 		event->low = lo;
 		type = event_type(event);
 		switch (type) {
+		case CPTS_EV_TX:
+			if (cpts_match_tx_ts(cpts, event)) {
+				/* if the new event matches an existing skb,
+				 * then don't queue it
+				 */
+				break;
+			}
+			/* fall through */
 		case CPTS_EV_PUSH:
 		case CPTS_EV_RX:
-		case CPTS_EV_TX:
 			list_del_init(&event->list);
 			list_add_tail(&event->list, &cpts->events);
 			break;
@@ -224,7 +290,29 @@ static int cpts_ptp_enable(struct ptp_clock_info *ptp,
 	return -EOPNOTSUPP;
 }
 
-static struct ptp_clock_info cpts_info = {
+static long cpts_overflow_check(struct ptp_clock_info *ptp)
+{
+	struct cpts *cpts = container_of(ptp, struct cpts, info);
+	unsigned long delay = cpts->ov_check_period;
+	struct timespec64 ts;
+	unsigned long flags;
+
+	spin_lock_irqsave(&cpts->lock, flags);
+	ts = ns_to_timespec64(timecounter_read(&cpts->tc));
+
+	if (!skb_queue_empty(&cpts->txq)) {
+		cpts_purge_txq(cpts);
+		if (!skb_queue_empty(&cpts->txq))
+			delay = CPTS_SKB_TX_WORK_TIMEOUT;
+	}
+	spin_unlock_irqrestore(&cpts->lock, flags);
+
+	pr_debug("cpts overflow check at %lld.%09ld\n",
+		 (long long)ts.tv_sec, ts.tv_nsec);
+	return (long)delay;
+}
+
+static const struct ptp_clock_info cpts_info = {
 	.owner		= THIS_MODULE,
 	.name		= "CTPS timer",
 	.max_adj	= 1000000,
@@ -236,17 +324,8 @@ static struct ptp_clock_info cpts_info = {
 	.gettime64	= cpts_ptp_gettime,
 	.settime64	= cpts_ptp_settime,
 	.enable		= cpts_ptp_enable,
+	.do_aux_work	= cpts_overflow_check,
 };
-
-static void cpts_overflow_check(struct work_struct *work)
-{
-	struct timespec64 ts;
-	struct cpts *cpts = container_of(work, struct cpts, overflow_work.work);
-
-	cpts_ptp_gettime(&cpts->info, &ts);
-	pr_debug("cpts overflow check at %lld.%09lu\n", ts.tv_sec, ts.tv_nsec);
-	schedule_delayed_work(&cpts->overflow_work, cpts->ov_check_period);
-}
 
 static int cpts_match(struct sk_buff *skb, unsigned int ptp_class,
 		      u16 ts_seqid, u8 ts_msgtype)
@@ -299,7 +378,7 @@ static u64 cpts_find_ts(struct cpts *cpts, struct sk_buff *skb, int ev_type)
 		return 0;
 
 	spin_lock_irqsave(&cpts->lock, flags);
-	cpts_fifo_read(cpts, CPTS_EV_PUSH);
+	cpts_fifo_read(cpts, -1);
 	list_for_each_safe(this, next, &cpts->events) {
 		event = list_entry(this, struct cpts_event, list);
 		if (event_expired(event)) {
@@ -317,6 +396,19 @@ static u64 cpts_find_ts(struct cpts *cpts, struct sk_buff *skb, int ev_type)
 			break;
 		}
 	}
+
+	if (ev_type == CPTS_EV_TX && !ns) {
+		struct cpts_skb_cb_data *skb_cb =
+				(struct cpts_skb_cb_data *)skb->cb;
+		/* Not found, add frame to queue for processing later.
+		 * The periodic FIFO check will handle this.
+		 */
+		skb_get(skb);
+		/* get the timestamp for timeouts */
+		skb_cb->tmo = jiffies + msecs_to_jiffies(100);
+		__skb_queue_tail(&cpts->txq, skb);
+		ptp_schedule_worker(cpts->clock, 0);
+	}
 	spin_unlock_irqrestore(&cpts->lock, flags);
 
 	return ns;
@@ -327,8 +419,6 @@ void cpts_rx_timestamp(struct cpts *cpts, struct sk_buff *skb)
 	u64 ns;
 	struct skb_shared_hwtstamps *ssh;
 
-	if (!cpts->rx_enable)
-		return;
 	ns = cpts_find_ts(cpts, skb, CPTS_EV_RX);
 	if (!ns)
 		return;
@@ -358,6 +448,7 @@ int cpts_register(struct cpts *cpts)
 {
 	int err, i;
 
+	skb_queue_head_init(&cpts->txq);
 	INIT_LIST_HEAD(&cpts->events);
 	INIT_LIST_HEAD(&cpts->pool);
 	for (i = 0; i < CPTS_MAX_EVENTS; i++)
@@ -378,7 +469,7 @@ int cpts_register(struct cpts *cpts)
 	}
 	cpts->phc_index = ptp_clock_index(cpts->clock);
 
-	schedule_delayed_work(&cpts->overflow_work, cpts->ov_check_period);
+	ptp_schedule_worker(cpts->clock, cpts->ov_check_period);
 	return 0;
 
 err_ptp:
@@ -392,13 +483,14 @@ void cpts_unregister(struct cpts *cpts)
 	if (WARN_ON(!cpts->clock))
 		return;
 
-	cancel_delayed_work_sync(&cpts->overflow_work);
-
 	ptp_clock_unregister(cpts->clock);
 	cpts->clock = NULL;
 
 	cpts_write32(cpts, 0, int_enable);
 	cpts_write32(cpts, 0, control);
+
+	/* Drop all packet */
+	skb_queue_purge(&cpts->txq);
 
 	clk_disable(cpts->refclk);
 }
@@ -441,6 +533,82 @@ static void cpts_calc_mult_shift(struct cpts *cpts)
 		 freq, cpts->cc.mult, cpts->cc.shift, (ns - NSEC_PER_SEC));
 }
 
+static int cpts_of_mux_clk_setup(struct cpts *cpts, struct device_node *node)
+{
+	struct device_node *refclk_np;
+	const char **parent_names;
+	unsigned int num_parents;
+	struct clk_hw *clk_hw;
+	int ret = -EINVAL;
+	u32 *mux_table;
+
+	refclk_np = of_get_child_by_name(node, "cpts-refclk-mux");
+	if (!refclk_np)
+		/* refclk selection supported not for all SoCs */
+		return 0;
+
+	num_parents = of_clk_get_parent_count(refclk_np);
+	if (num_parents < 1) {
+		dev_err(cpts->dev, "mux-clock %s must have parents\n",
+			refclk_np->name);
+		goto mux_fail;
+	}
+
+	parent_names = devm_kzalloc(cpts->dev, (sizeof(char *) * num_parents),
+				    GFP_KERNEL);
+
+	mux_table = devm_kzalloc(cpts->dev, sizeof(*mux_table) * num_parents,
+				 GFP_KERNEL);
+	if (!mux_table || !parent_names) {
+		ret = -ENOMEM;
+		goto mux_fail;
+	}
+
+	of_clk_parent_fill(refclk_np, parent_names, num_parents);
+
+	ret = of_property_read_variable_u32_array(refclk_np, "ti,mux-tbl",
+						  mux_table,
+						  num_parents, num_parents);
+	if (ret < 0)
+		goto mux_fail;
+
+	clk_hw = clk_hw_register_mux_table(cpts->dev, refclk_np->name,
+					   parent_names, num_parents,
+					   0,
+					   &cpts->reg->rftclk_sel, 0, 0x1F,
+					   0, mux_table, NULL);
+	if (IS_ERR(clk_hw)) {
+		ret = PTR_ERR(clk_hw);
+		goto mux_fail;
+	}
+
+	ret = devm_add_action_or_reset(cpts->dev,
+				       (void(*)(void *))clk_hw_unregister_mux,
+				       clk_hw);
+	if (ret) {
+		dev_err(cpts->dev, "add clkmux unreg action %d", ret);
+		goto mux_fail;
+	}
+
+	ret = of_clk_add_hw_provider(refclk_np, of_clk_hw_simple_get, clk_hw);
+	if (ret)
+		goto mux_fail;
+
+	ret = devm_add_action_or_reset(cpts->dev,
+				       (void(*)(void *))of_clk_del_provider,
+				       refclk_np);
+	if (ret) {
+		dev_err(cpts->dev, "add clkmux provider unreg action %d", ret);
+		goto mux_fail;
+	}
+
+	return ret;
+
+mux_fail:
+	of_node_put(refclk_np);
+	return ret;
+}
+
 static int cpts_of_parse(struct cpts *cpts, struct device_node *node)
 {
 	int ret = -EINVAL;
@@ -456,7 +624,7 @@ static int cpts_of_parse(struct cpts *cpts, struct device_node *node)
 	    (!cpts->cc.mult && cpts->cc.shift))
 		goto of_error;
 
-	return 0;
+	return cpts_of_mux_clk_setup(cpts, node);
 
 of_error:
 	dev_err(cpts->dev, "CPTS: Missing property in the DT.\n");
@@ -476,19 +644,25 @@ struct cpts *cpts_create(struct device *dev, void __iomem *regs,
 	cpts->dev = dev;
 	cpts->reg = (struct cpsw_cpts __iomem *)regs;
 	spin_lock_init(&cpts->lock);
-	INIT_DELAYED_WORK(&cpts->overflow_work, cpts_overflow_check);
 
 	ret = cpts_of_parse(cpts, node);
 	if (ret)
 		return ERR_PTR(ret);
 
-	cpts->refclk = devm_clk_get(dev, "cpts");
+	cpts->refclk = devm_get_clk_from_child(dev, node, "cpts");
+	if (IS_ERR(cpts->refclk))
+		/* try get clk from dev node for compatibility */
+		cpts->refclk = devm_clk_get(dev, "cpts");
+
 	if (IS_ERR(cpts->refclk)) {
-		dev_err(dev, "Failed to get cpts refclk\n");
-		return ERR_PTR(PTR_ERR(cpts->refclk));
+		dev_err(dev, "Failed to get cpts refclk %ld\n",
+			PTR_ERR(cpts->refclk));
+		return ERR_CAST(cpts->refclk);
 	}
 
-	clk_prepare(cpts->refclk);
+	ret = clk_prepare(cpts->refclk);
+	if (ret)
+		return ERR_PTR(ret);
 
 	cpts->cc.read = cpts_systim_read;
 	cpts->cc.mask = CLOCKSOURCE_MASK(32);

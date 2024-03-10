@@ -1,8 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _ASM_X86_AMD_NB_H
 #define _ASM_X86_AMD_NB_H
 
 #include <linux/ioport.h>
 #include <linux/pci.h>
+#include <linux/refcount.h>
 
 struct amd_nb_bus_dev_range {
 	u8 bus;
@@ -55,7 +57,7 @@ struct threshold_bank {
 	struct threshold_block	*blocks;
 
 	/* initialized to the number of CPUs on the node sharing this bank */
-	atomic_t		cpus;
+	refcount_t		cpus;
 };
 
 struct amd_northbridge {
@@ -101,6 +103,9 @@ static inline u16 amd_pci_dev_to_node_id(struct pci_dev *pdev)
 
 static inline bool amd_gart_present(void)
 {
+	if (boot_cpu_data.x86_vendor != X86_VENDOR_AMD)
+		return false;
+
 	/* GART present only on Fam15h, upto model 0fh */
 	if (boot_cpu_data.x86 == 0xf || boot_cpu_data.x86 == 0x10 ||
 	    (boot_cpu_data.x86 == 0x15 && boot_cpu_data.x86_model < 0x10))

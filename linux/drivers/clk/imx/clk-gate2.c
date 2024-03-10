@@ -1,10 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2010-2011 Canonical Ltd <jeremy.kerr@canonical.com>
  * Copyright (C) 2011-2012 Mike Turquette, Linaro Ltd <mturquette@linaro.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  *
  * Gated clock implementation
  */
@@ -118,7 +115,7 @@ static void clk_gate2_disable_unused(struct clk_hw *hw)
 	spin_unlock_irqrestore(gate->lock, flags);
 }
 
-static struct clk_ops clk_gate2_ops = {
+static const struct clk_ops clk_gate2_ops = {
 	.enable = clk_gate2_enable,
 	.disable = clk_gate2_disable,
 	.disable_unused = clk_gate2_disable_unused,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Generic Exynos Bus frequency driver with DEVFREQ Framework
  *
@@ -6,10 +7,6 @@
  *
  * This driver support Exynos Bus frequency feature by using
  * DEVFREQ framework and is based on drivers/devfreq/exynos/exynos4_bus.c.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/clk.h>
@@ -103,18 +100,17 @@ static int exynos_bus_target(struct device *dev, unsigned long *freq, u32 flags)
 	int ret = 0;
 
 	/* Get new opp-bus instance according to new bus clock */
-	rcu_read_lock();
 	new_opp = devfreq_recommended_opp(dev, freq, flags);
 	if (IS_ERR(new_opp)) {
 		dev_err(dev, "failed to get recommended opp instance\n");
-		rcu_read_unlock();
 		return PTR_ERR(new_opp);
 	}
 
 	new_freq = dev_pm_opp_get_freq(new_opp);
 	new_volt = dev_pm_opp_get_voltage(new_opp);
+	dev_pm_opp_put(new_opp);
+
 	old_freq = bus->curr_freq;
-	rcu_read_unlock();
 
 	if (old_freq == new_freq)
 		return 0;
@@ -147,8 +143,8 @@ static int exynos_bus_target(struct device *dev, unsigned long *freq, u32 flags)
 	}
 	bus->curr_freq = new_freq;
 
-	dev_dbg(dev, "Set the frequency of bus (%lukHz -> %lukHz)\n",
-			old_freq/1000, new_freq/1000);
+	dev_dbg(dev, "Set the frequency of bus (%luHz -> %luHz, %luHz)\n",
+			old_freq, new_freq, clk_get_rate(bus->clk));
 out:
 	mutex_unlock(&bus->lock);
 
@@ -214,17 +210,16 @@ static int exynos_bus_passive_target(struct device *dev, unsigned long *freq,
 	int ret = 0;
 
 	/* Get new opp-bus instance according to new bus clock */
-	rcu_read_lock();
 	new_opp = devfreq_recommended_opp(dev, freq, flags);
 	if (IS_ERR(new_opp)) {
 		dev_err(dev, "failed to get recommended opp instance\n");
-		rcu_read_unlock();
 		return PTR_ERR(new_opp);
 	}
 
 	new_freq = dev_pm_opp_get_freq(new_opp);
+	dev_pm_opp_put(new_opp);
+
 	old_freq = bus->curr_freq;
-	rcu_read_unlock();
 
 	if (old_freq == new_freq)
 		return 0;
@@ -241,8 +236,8 @@ static int exynos_bus_passive_target(struct device *dev, unsigned long *freq,
 	*freq = new_freq;
 	bus->curr_freq = new_freq;
 
-	dev_dbg(dev, "Set the frequency of bus (%lukHz -> %lukHz)\n",
-			old_freq/1000, new_freq/1000);
+	dev_dbg(dev, "Set the frequency of bus (%luHz -> %luHz, %luHz)\n",
+			old_freq, new_freq, clk_get_rate(bus->clk));
 out:
 	mutex_unlock(&bus->lock);
 
@@ -358,16 +353,14 @@ static int exynos_bus_parse_of(struct device_node *np,
 
 	rate = clk_get_rate(bus->clk);
 
-	rcu_read_lock();
 	opp = devfreq_recommended_opp(dev, &rate, 0);
 	if (IS_ERR(opp)) {
 		dev_err(dev, "failed to find dev_pm_opp\n");
-		rcu_read_unlock();
 		ret = PTR_ERR(opp);
 		goto err_opp;
 	}
 	bus->curr_freq = dev_pm_opp_get_freq(opp);
-	rcu_read_unlock();
+	dev_pm_opp_put(opp);
 
 	return 0;
 
@@ -440,7 +433,8 @@ static int exynos_bus_probe(struct platform_device *pdev)
 	ondemand_data->downdifferential = 5;
 
 	/* Add devfreq device to monitor and handle the exynos bus */
-	bus->devfreq = devm_devfreq_add_device(dev, profile, "simple_ondemand",
+	bus->devfreq = devm_devfreq_add_device(dev, profile,
+						DEVFREQ_GOV_SIMPLE_ONDEMAND,
 						ondemand_data);
 	if (IS_ERR(bus->devfreq)) {
 		dev_err(dev, "failed to add devfreq device\n");
@@ -492,7 +486,7 @@ passive:
 	passive_data->parent = parent_devfreq;
 
 	/* Add devfreq device for exynos bus with passive governor */
-	bus->devfreq = devm_devfreq_add_device(dev, profile, "passive",
+	bus->devfreq = devm_devfreq_add_device(dev, profile, DEVFREQ_GOV_PASSIVE,
 						passive_data);
 	if (IS_ERR(bus->devfreq)) {
 		dev_err(dev,
@@ -515,6 +509,13 @@ err:
 	clk_disable_unprepare(bus->clk);
 
 	return ret;
+}
+
+static void exynos_bus_shutdown(struct platform_device *pdev)
+{
+	struct exynos_bus *bus = dev_get_drvdata(&pdev->dev);
+
+	devfreq_suspend_device(bus->devfreq);
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -559,6 +560,7 @@ MODULE_DEVICE_TABLE(of, exynos_bus_of_match);
 
 static struct platform_driver exynos_bus_platdrv = {
 	.probe		= exynos_bus_probe,
+	.shutdown	= exynos_bus_shutdown,
 	.driver = {
 		.name	= "exynos-bus",
 		.pm	= &exynos_bus_pm,

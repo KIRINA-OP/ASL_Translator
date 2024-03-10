@@ -39,15 +39,8 @@
 	model = "NorthStar Enterprise Router (BCM953012ER)";
 	compatible = "brcm,bcm953012er", "brcm,brcm53012", "brcm,bcm4708";
 
-	aliases {
-		serial0 = &uart0;
-	};
-
-	chosen {
-		stdout-path = "serial0:115200n8";
-	};
-
 	memory {
+		device_type = "memory";
 		reg = <0x00000000 0x8000000>;
 	};
 
@@ -68,10 +61,6 @@
 			gpios = <&chipcommon 15 GPIO_ACTIVE_LOW>;
 		};
 	};
-};
-
-&uart0 {
-	status = "okay";
 };
 
 &spi_nor {
@@ -101,4 +90,8 @@
 			ethernet = <&gmac0>;
 		};
 	};
+};
+
+&usb3_phy {
+	status = "okay";
 };

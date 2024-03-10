@@ -27,6 +27,7 @@
 #include <linux/types.h>
 #include <linux/idr.h>
 #include <linux/workqueue.h>
+#include <linux/llist.h>
 
 #include <drm/drm_modeset_lock.h>
 
@@ -34,6 +35,8 @@ struct drm_file;
 struct drm_device;
 struct drm_atomic_state;
 struct drm_mode_fb_cmd2;
+struct drm_format_info;
+struct drm_display_mode;
 
 /**
  * struct drm_mode_config_funcs - basic driver provided mode setting functions
@@ -47,7 +50,13 @@ struct drm_mode_config_funcs {
 	 *
 	 * Create a new framebuffer object. The core does basic checks on the
 	 * requested metadata, but most of that is left to the driver. See
-	 * struct &drm_mode_fb_cmd2 for details.
+	 * &struct drm_mode_fb_cmd2 for details.
+	 *
+	 * To validate the pixel format and modifier drivers can use
+	 * drm_any_plane_has_format() to make sure at least one plane supports
+	 * the requested values. Note that the driver must first determine the
+	 * actual modifier used if the request doesn't have it specified,
+	 * ie. when (@mode_cmd->flags & DRM_MODE_FB_MODIFIERS) == 0.
 	 *
 	 * If the parameters are deemed valid and the backing storage objects in
 	 * the underlying memory manager all exist, then the driver allocates
@@ -70,6 +79,19 @@ struct drm_mode_config_funcs {
 					     const struct drm_mode_fb_cmd2 *mode_cmd);
 
 	/**
+	 * @get_format_info:
+	 *
+	 * Allows a driver to return custom format information for special
+	 * fb layouts (eg. ones with auxiliary compression control planes).
+	 *
+	 * RETURNS:
+	 *
+	 * The format information specific to the given fb metadata, or
+	 * NULL if none is found.
+	 */
+	const struct drm_format_info *(*get_format_info)(const struct drm_mode_fb_cmd2 *mode_cmd);
+
+	/**
 	 * @output_poll_changed:
 	 *
 	 * Callback used by helpers to inform the driver of output configuration
@@ -85,6 +107,17 @@ struct drm_mode_config_funcs {
 	 * there's no reason this is a core function.
 	 */
 	void (*output_poll_changed)(struct drm_device *dev);
+
+	/**
+	 * @mode_valid:
+	 *
+	 * Device specific validation of display modes. Can be used to reject
+	 * modes that can never be supported. Only device wide constraints can
+	 * be checked here. crtc/encoder/bridge/connector specific constraints
+	 * should be checked in the .mode_valid() hook for each specific object.
+	 */
+	enum drm_mode_status (*mode_valid)(struct drm_device *dev,
+					   const struct drm_display_mode *mode);
 
 	/**
 	 * @atomic_check:
@@ -132,10 +165,10 @@ struct drm_mode_config_funcs {
 	 *    that before calling this hook.
 	 *
 	 * See the documentation of @atomic_commit for an exhaustive list of
-	 * error conditions which don't have to be checked at the
-	 * ->atomic_check() stage?
+	 * error conditions which don't have to be checked at the in this
+	 * callback.
 	 *
-	 * See the documentation for struct &drm_atomic_state for how exactly
+	 * See the documentation for &struct drm_atomic_state for how exactly
 	 * an atomic modeset update is described.
 	 *
 	 * Drivers using the atomic helpers can implement this hook using
@@ -171,7 +204,7 @@ struct drm_mode_config_funcs {
 	 * calling this function, and that nothing has been changed in the
 	 * interim.
 	 *
-	 * See the documentation for struct &drm_atomic_state for how exactly
+	 * See the documentation for &struct drm_atomic_state for how exactly
 	 * an atomic modeset update is described.
 	 *
 	 * Drivers using the atomic helpers can implement this hook using
@@ -198,10 +231,10 @@ struct drm_mode_config_funcs {
 	 * completed. These events are per-CRTC and can be distinguished by the
 	 * CRTC index supplied in &drm_event to userspace.
 	 *
-	 * The drm core will supply a struct &drm_event in the event
-	 * member of each CRTC's &drm_crtc_state structure. See the
-	 * documentation for &drm_crtc_state for more details about the precise
-	 * semantics of this event.
+	 * The drm core will supply a &struct drm_event in each CRTC's
+	 * &drm_crtc_state.event. See the documentation for
+	 * &drm_crtc_state.event for more details about the precise semantics of
+	 * this event.
 	 *
 	 * NOTE:
 	 *
@@ -254,6 +287,9 @@ struct drm_mode_config_funcs {
 	 * state easily. If this hook is implemented, drivers must also
 	 * implement @atomic_state_clear and @atomic_state_free.
 	 *
+	 * Subclassing of &drm_atomic_state is deprecated in favour of using
+	 * &drm_private_state and &drm_private_obj.
+	 *
 	 * RETURNS:
 	 *
 	 * A new &drm_atomic_state on success or NULL on failure.
@@ -267,7 +303,7 @@ struct drm_mode_config_funcs {
 	 * passed-in &drm_atomic_state. This hook is called when the caller
 	 * encountered a &drm_modeset_lock deadlock and needs to drop all
 	 * already acquired locks as part of the deadlock avoidance dance
-	 * implemented in drm_modeset_lock_backoff().
+	 * implemented in drm_modeset_backoff().
 	 *
 	 * Any duplicated state must be invalidated since a concurrent atomic
 	 * update might change it, and the drm atomic interfaces always apply
@@ -275,6 +311,9 @@ struct drm_mode_config_funcs {
 	 *
 	 * Drivers that implement this must call drm_atomic_state_default_clear()
 	 * to clear common state.
+	 *
+	 * Subclassing of &drm_atomic_state is deprecated in favour of using
+	 * &drm_private_state and &drm_private_obj.
 	 */
 	void (*atomic_state_clear)(struct drm_atomic_state *state);
 
@@ -285,42 +324,27 @@ struct drm_mode_config_funcs {
 	 * itself. Note that the core first calls drm_atomic_state_clear() to
 	 * avoid code duplicate between the clear and free hooks.
 	 *
-	 * Drivers that implement this must call drm_atomic_state_default_free()
-	 * to release common resources.
+	 * Drivers that implement this must call
+	 * drm_atomic_state_default_release() to release common resources.
+	 *
+	 * Subclassing of &drm_atomic_state is deprecated in favour of using
+	 * &drm_private_state and &drm_private_obj.
 	 */
 	void (*atomic_state_free)(struct drm_atomic_state *state);
 };
 
 /**
  * struct drm_mode_config - Mode configuration control structure
- * @mutex: mutex protecting KMS related lists and structures
- * @connection_mutex: ww mutex protecting connector state and routing
- * @acquire_ctx: global implicit acquire context used by atomic drivers for
- * 	legacy IOCTLs
- * @fb_lock: mutex to protect fb state and lists
- * @num_fb: number of fbs available
- * @fb_list: list of framebuffers available
- * @num_encoder: number of encoders on this device
- * @encoder_list: list of encoder objects
- * @num_overlay_plane: number of overlay planes on this device
- * @num_total_plane: number of universal (i.e. with primary/curso) planes on this device
- * @plane_list: list of plane objects
- * @num_crtc: number of CRTCs on this device
- * @crtc_list: list of CRTC objects
- * @property_list: list of property objects
- * @min_width: minimum pixel width on this device
- * @min_height: minimum pixel height on this device
- * @max_width: maximum pixel width on this device
- * @max_height: maximum pixel height on this device
+ * @min_width: minimum fb pixel width on this device
+ * @min_height: minimum fb pixel height on this device
+ * @max_width: maximum fb pixel width on this device
+ * @max_height: maximum fb pixel height on this device
  * @funcs: core driver provided mode setting functions
  * @fb_base: base address of the framebuffer
  * @poll_enabled: track polling support for this device
  * @poll_running: track polling status for this device
  * @delayed_event: track delayed poll uevent deliver for this device
  * @output_poll_work: delayed work for polling in process context
- * @property_blob_list: list of all the blob property objects
- * @blob_lock: mutex for blob property allocation and management
- * @*_property: core property tracking
  * @preferred_depth: preferred RBG pixel depth, used by fb helpers
  * @prefer_shadow: hint to userspace to prefer shadow-fb rendering
  * @cursor_width: hint to userspace for max cursor width
@@ -332,25 +356,53 @@ struct drm_mode_config_funcs {
  * global restrictions are also here, e.g. dimension restrictions.
  */
 struct drm_mode_config {
-	struct mutex mutex; /* protects configuration (mode lists etc.) */
-	struct drm_modeset_lock connection_mutex; /* protects connector->encoder and encoder->crtc links */
-	struct drm_modeset_acquire_ctx *acquire_ctx; /* for legacy _lock_all() / _unlock_all() */
+	/**
+	 * @mutex:
+	 *
+	 * This is the big scary modeset BKL which protects everything that
+	 * isn't protect otherwise. Scope is unclear and fuzzy, try to remove
+	 * anything from under its protection and move it into more well-scoped
+	 * locks.
+	 *
+	 * The one important thing this protects is the use of @acquire_ctx.
+	 */
+	struct mutex mutex;
+
+	/**
+	 * @connection_mutex:
+	 *
+	 * This protects connector state and the connector to encoder to CRTC
+	 * routing chain.
+	 *
+	 * For atomic drivers specifically this protects &drm_connector.state.
+	 */
+	struct drm_modeset_lock connection_mutex;
+
+	/**
+	 * @acquire_ctx:
+	 *
+	 * Global implicit acquire context used by atomic drivers for legacy
+	 * IOCTLs. Deprecated, since implicit locking contexts make it
+	 * impossible to use driver-private &struct drm_modeset_lock. Users of
+	 * this must hold @mutex.
+	 */
+	struct drm_modeset_acquire_ctx *acquire_ctx;
 
 	/**
 	 * @idr_mutex:
 	 *
-	 * Mutex for KMS ID allocation and management. Protects both @crtc_idr
+	 * Mutex for KMS ID allocation and management. Protects both @object_idr
 	 * and @tile_idr.
 	 */
 	struct mutex idr_mutex;
 
 	/**
-	 * @crtc_idr:
+	 * @object_idr:
 	 *
 	 * Main KMS ID tracking object. Use this idr for all IDs, fb, crtc,
 	 * connector, modes - just makes life easier to have only one.
 	 */
-	struct idr crtc_idr;
+	struct idr object_idr;
 
 	/**
 	 * @tile_idr:
@@ -360,12 +412,21 @@ struct drm_mode_config {
 	 */
 	struct idr tile_idr;
 
-	struct mutex fb_lock; /* proctects global and per-file fb lists */
+	/** @fb_lock: Mutex to protect fb the global @fb_list and @num_fb. */
+	struct mutex fb_lock;
+	/** @num_fb: Number of entries on @fb_list. */
 	int num_fb;
+	/** @fb_list: List of all &struct drm_framebuffer. */
 	struct list_head fb_list;
 
 	/**
-	 * @num_connector: Number of connectors on this device.
+	 * @connector_list_lock: Protects @num_connector and
+	 * @connector_list and @connector_free_list.
+	 */
+	spinlock_t connector_list_lock;
+	/**
+	 * @num_connector: Number of connectors on this device. Protected by
+	 * @connector_list_lock.
 	 */
 	int num_connector;
 	/**
@@ -373,26 +434,92 @@ struct drm_mode_config {
 	 */
 	struct ida connector_ida;
 	/**
-	 * @connector_list: List of connector objects.
+	 * @connector_list:
+	 *
+	 * List of connector objects linked with &drm_connector.head. Protected
+	 * by @connector_list_lock. Only use drm_for_each_connector_iter() and
+	 * &struct drm_connector_list_iter to walk this list.
 	 */
 	struct list_head connector_list;
+	/**
+	 * @connector_free_list:
+	 *
+	 * List of connector objects linked with &drm_connector.free_head.
+	 * Protected by @connector_list_lock. Used by
+	 * drm_for_each_connector_iter() and
+	 * &struct drm_connector_list_iter to savely free connectors using
+	 * @connector_free_work.
+	 */
+	struct llist_head connector_free_list;
+	/**
+	 * @connector_free_work: Work to clean up @connector_free_list.
+	 */
+	struct work_struct connector_free_work;
+
+	/**
+	 * @num_encoder:
+	 *
+	 * Number of encoders on this device. This is invariant over the
+	 * lifetime of a device and hence doesn't need any locks.
+	 */
 	int num_encoder;
+	/**
+	 * @encoder_list:
+	 *
+	 * List of encoder objects linked with &drm_encoder.head. This is
+	 * invariant over the lifetime of a device and hence doesn't need any
+	 * locks.
+	 */
 	struct list_head encoder_list;
 
-	/*
-	 * Track # of overlay planes separately from # of total planes.  By
-	 * default we only advertise overlay planes to userspace; if userspace
-	 * sets the "universal plane" capability bit, we'll go ahead and
-	 * expose all planes.
+	/**
+	 * @num_total_plane:
+	 *
+	 * Number of universal (i.e. with primary/curso) planes on this device.
+	 * This is invariant over the lifetime of a device and hence doesn't
+	 * need any locks.
 	 */
-	int num_overlay_plane;
 	int num_total_plane;
+	/**
+	 * @plane_list:
+	 *
+	 * List of plane objects linked with &drm_plane.head. This is invariant
+	 * over the lifetime of a device and hence doesn't need any locks.
+	 */
 	struct list_head plane_list;
 
+	/**
+	 * @num_crtc:
+	 *
+	 * Number of CRTCs on this device linked with &drm_crtc.head. This is invariant over the lifetime
+	 * of a device and hence doesn't need any locks.
+	 */
 	int num_crtc;
+	/**
+	 * @crtc_list:
+	 *
+	 * List of CRTC objects linked with &drm_crtc.head. This is invariant
+	 * over the lifetime of a device and hence doesn't need any locks.
+	 */
 	struct list_head crtc_list;
 
+	/**
+	 * @property_list:
+	 *
+	 * List of property type objects linked with &drm_property.head. This is
+	 * invariant over the lifetime of a device and hence doesn't need any
+	 * locks.
+	 */
 	struct list_head property_list;
+
+	/**
+	 * @privobj_list:
+	 *
+	 * List of private objects linked with &drm_private_obj.head. This is
+	 * invariant over the lifetime of a device and hence doesn't need any
+	 * locks.
+	 */
+	struct list_head privobj_list;
 
 	int min_width, min_height;
 	int max_width, max_height;
@@ -405,10 +532,24 @@ struct drm_mode_config {
 	bool delayed_event;
 	struct delayed_work output_poll_work;
 
+	/**
+	 * @blob_lock:
+	 *
+	 * Mutex for blob property allocation and management, protects
+	 * @property_blob_list and &drm_file.blobs.
+	 */
 	struct mutex blob_lock;
 
-	/* pointers to standard properties */
+	/**
+	 * @property_blob_list:
+	 *
+	 * List of all the blob property objects linked with
+	 * &drm_property_blob.head. Protected by @blob_lock.
+	 */
 	struct list_head property_blob_list;
+
+	/* pointers to standard properties */
+
 	/**
 	 * @edid_property: Default connector property to hold the EDID of the
 	 * currently connected sink, if any.
@@ -430,6 +571,11 @@ struct drm_mode_config {
 	 * multiple CRTCs.
 	 */
 	struct drm_property *tile_property;
+	/**
+	 * @link_status_property: Default connector property for link status
+	 * of a connector
+	 */
+	struct drm_property *link_status_property;
 	/**
 	 * @plane_type_property: Default plane property to differentiate
 	 * CURSOR, PRIMARY and OVERLAY legacy uses of planes.
@@ -497,6 +643,15 @@ struct drm_mode_config {
 	 */
 	struct drm_property *prop_crtc_id;
 	/**
+	 * @prop_fb_damage_clips: Optional plane property to mark damaged
+	 * regions on the plane in framebuffer coordinates of the framebuffer
+	 * attached to the plane.
+	 *
+	 * The layout of blob data is simply an array of &drm_mode_rect. Unlike
+	 * plane src coordinates, damage clips are not in 16.16 fixed point.
+	 */
+	struct drm_property *prop_fb_damage_clips;
+	/**
 	 * @prop_active: Default atomic CRTC property to control the active
 	 * state, which is the simplified implementation for DPMS in atomic
 	 * drivers.
@@ -508,6 +663,11 @@ struct drm_mode_config {
 	 * connectors must be of and active must be set to disabled, too.
 	 */
 	struct drm_property *prop_mode_id;
+	/**
+	 * @prop_vrr_enabled: Default atomic CRTC property to indicate
+	 * whether variable refresh rate should be enabled on the CRTC.
+	 */
+	struct drm_property *prop_vrr_enabled;
 
 	/**
 	 * @dvi_i_subconnector_property: Optional DVI-I property to
@@ -537,22 +697,22 @@ struct drm_mode_config {
 	struct drm_property *tv_mode_property;
 	/**
 	 * @tv_left_margin_property: Optional TV property to set the left
-	 * margin.
+	 * margin (expressed in pixels).
 	 */
 	struct drm_property *tv_left_margin_property;
 	/**
 	 * @tv_right_margin_property: Optional TV property to set the right
-	 * margin.
+	 * margin (expressed in pixels).
 	 */
 	struct drm_property *tv_right_margin_property;
 	/**
 	 * @tv_top_margin_property: Optional TV property to set the right
-	 * margin.
+	 * margin (expressed in pixels).
 	 */
 	struct drm_property *tv_top_margin_property;
 	/**
 	 * @tv_bottom_margin_property: Optional TV property to set the right
-	 * margin.
+	 * margin (expressed in pixels).
 	 */
 	struct drm_property *tv_bottom_margin_property;
 	/**
@@ -596,6 +756,11 @@ struct drm_mode_config {
 	 */
 	struct drm_property *aspect_ratio_property;
 	/**
+	 * @content_type_property: Optional connector property to control the
+	 * HDMI infoframe content type setting.
+	 */
+	struct drm_property *content_type_property;
+	/**
 	 * @degamma_lut_property: Optional CRTC property to set the LUT used to
 	 * convert the framebuffer's colors to linear gamma.
 	 */
@@ -634,8 +799,67 @@ struct drm_mode_config {
 	 */
 	struct drm_property *suggested_y_property;
 
+	/**
+	 * @non_desktop_property: Optional connector property with a hint
+	 * that device isn't a standard display, and the console/desktop,
+	 * should not be displayed on it.
+	 */
+	struct drm_property *non_desktop_property;
+
+	/**
+	 * @panel_orientation_property: Optional connector property indicating
+	 * how the lcd-panel is mounted inside the casing (e.g. normal or
+	 * upside-down).
+	 */
+	struct drm_property *panel_orientation_property;
+
+	/**
+	 * @writeback_fb_id_property: Property for writeback connectors, storing
+	 * the ID of the output framebuffer.
+	 * See also: drm_writeback_connector_init()
+	 */
+	struct drm_property *writeback_fb_id_property;
+
+	/**
+	 * @writeback_pixel_formats_property: Property for writeback connectors,
+	 * storing an array of the supported pixel formats for the writeback
+	 * engine (read-only).
+	 * See also: drm_writeback_connector_init()
+	 */
+	struct drm_property *writeback_pixel_formats_property;
+	/**
+	 * @writeback_out_fence_ptr_property: Property for writeback connectors,
+	 * fd pointer representing the outgoing fences for a writeback
+	 * connector. Userspace should provide a pointer to a value of type s32,
+	 * and then cast that pointer to u64.
+	 * See also: drm_writeback_connector_init()
+	 */
+	struct drm_property *writeback_out_fence_ptr_property;
+
 	/* dumb ioctl parameters */
 	uint32_t preferred_depth, prefer_shadow;
+
+	/**
+	 * @quirk_addfb_prefer_xbgr_30bpp:
+	 *
+	 * Special hack for legacy ADDFB to keep nouveau userspace happy. Should
+	 * only ever be set by the nouveau kernel driver.
+	 */
+	bool quirk_addfb_prefer_xbgr_30bpp;
+
+	/**
+	 * @quirk_addfb_prefer_host_byte_order:
+	 *
+	 * When set to true drm_mode_addfb() will pick host byte order
+	 * pixel_format when calling drm_mode_addfb2().  This is how
+	 * drm_mode_addfb() should have worked from day one.  It
+	 * didn't though, so we ended up with quirks in both kernel
+	 * and userspace drivers to deal with the broken behavior.
+	 * Simply fixing drm_mode_addfb() unconditionally would break
+	 * these drivers, so add a quirk bit here to allow drivers
+	 * opt-in.
+	 */
+	bool quirk_addfb_prefer_host_byte_order;
 
 	/**
 	 * @async_page_flip: Does this device support async flips on the primary
@@ -650,10 +874,33 @@ struct drm_mode_config {
 	 */
 	bool allow_fb_modifiers;
 
+	/**
+	 * @normalize_zpos:
+	 *
+	 * If true the drm core will call drm_atomic_normalize_zpos() as part of
+	 * atomic mode checking from drm_atomic_helper_check()
+	 */
+	bool normalize_zpos;
+
+	/**
+	 * @modifiers_property: Plane property to list support modifier/format
+	 * combination.
+	 */
+	struct drm_property *modifiers_property;
+
 	/* cursor size */
 	uint32_t cursor_width, cursor_height;
 
-	struct drm_mode_config_helper_funcs *helper_private;
+	/**
+	 * @suspend_state:
+	 *
+	 * Atomic state when suspended.
+	 * Set by drm_mode_config_helper_suspend() and cleared by
+	 * drm_mode_config_helper_resume().
+	 */
+	struct drm_atomic_state *suspend_state;
+
+	const struct drm_mode_config_helper_funcs *helper_private;
 };
 
 void drm_mode_config_init(struct drm_device *dev);

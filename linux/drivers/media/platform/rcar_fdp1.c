@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Renesas RCar Fine Display Processor
+ * Renesas R-Car Fine Display Processor
  *
  * Video format converter and frame deinterlacer device.
  *
@@ -8,11 +9,6 @@
  *
  * This code is developed and inspired from the vim2m, rcar_jpu,
  * m2m-deinterlace, and vsp1 drivers.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by the
- * Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version
  */
 
 #include <linux/clk.h>
@@ -258,8 +254,11 @@ MODULE_PARM_DESC(debug, "activate debug info");
 
 /* Internal Data (HW Version) */
 #define FD1_IP_INTDATA			0x0800
-#define FD1_IP_H3			0x02010101
+#define FD1_IP_H3_ES1			0x02010101
 #define FD1_IP_M3W			0x02010202
+#define FD1_IP_H3			0x02010203
+#define FD1_IP_M3N			0x02010204
+#define FD1_IP_E3			0x02010205
 
 /* LUTs */
 #define FD1_LUT_DIF_ADJ			0x1000
@@ -948,7 +947,7 @@ static void fdp1_configure_wpf(struct fdp1_ctx *ctx,
 	u32 rndctl;
 
 	pstride = q_data->format.plane_fmt[0].bytesperline
-			<< FD1_WPF_PSTRIDE_Y_SHIFT;
+		<< FD1_WPF_PSTRIDE_Y_SHIFT;
 
 	if (q_data->format.num_planes > 1)
 		pstride |= q_data->format.plane_fmt[1].bytesperline
@@ -1131,7 +1130,7 @@ static int fdp1_device_process(struct fdp1_ctx *ctx)
  * mem2mem callbacks
  */
 
-/**
+/*
  * job_ready() - check whether an instance is ready to be scheduled to run
  */
 static int fdp1_m2m_job_ready(void *priv)
@@ -1142,8 +1141,8 @@ static int fdp1_m2m_job_ready(void *priv)
 	int dstbufs = 1;
 
 	dprintk(ctx->fdp1, "+ Src: %d : Dst: %d\n",
-			v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx),
-			v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx));
+		v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx),
+		v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx));
 
 	/* One output buffer is required for each field */
 	if (V4L2_FIELD_HAS_BOTH(src_q_data->format.field))
@@ -1281,7 +1280,7 @@ static void fdp1_m2m_device_run(void *priv)
 
 		fdp1_queue_field(ctx, fbuf);
 		dprintk(fdp1, "Queued Buffer [%d] last_field:%d\n",
-				i, fbuf->last_field);
+			i, fbuf->last_field);
 	}
 
 	/* Queue as many jobs as our data provides for */
@@ -1340,7 +1339,7 @@ static void device_frame_end(struct fdp1_dev *fdp1,
 	fdp1_job_free(fdp1, job);
 
 	dprintk(fdp1, "curr_ctx->num_processed %d curr_ctx->translen %d\n",
-			ctx->num_processed, ctx->translen);
+		ctx->num_processed, ctx->translen);
 
 	if (ctx->num_processed == ctx->translen ||
 			ctx->aborting) {
@@ -1362,10 +1361,10 @@ static void device_frame_end(struct fdp1_dev *fdp1,
 static int fdp1_vidioc_querycap(struct file *file, void *priv,
 			   struct v4l2_capability *cap)
 {
-	strlcpy(cap->driver, DRIVER_NAME, sizeof(cap->driver));
-	strlcpy(cap->card, DRIVER_NAME, sizeof(cap->card));
+	strscpy(cap->driver, DRIVER_NAME, sizeof(cap->driver));
+	strscpy(cap->card, DRIVER_NAME, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info),
-			"platform:%s", DRIVER_NAME);
+		 "platform:%s", DRIVER_NAME);
 	return 0;
 }
 
@@ -1596,7 +1595,7 @@ static int fdp1_try_fmt(struct file *file, void *priv, struct v4l2_format *f)
 	else
 		fdp1_try_fmt_capture(ctx, NULL, &f->fmt.pix_mp);
 
-	dprintk(ctx->fdp1, "Try %s format: %4s (0x%08x) %ux%u field %u\n",
+	dprintk(ctx->fdp1, "Try %s format: %4.4s (0x%08x) %ux%u field %u\n",
 		V4L2_TYPE_IS_OUTPUT(f->type) ? "output" : "capture",
 		(char *)&f->fmt.pix_mp.pixelformat, f->fmt.pix_mp.pixelformat,
 		f->fmt.pix_mp.width, f->fmt.pix_mp.height, f->fmt.pix_mp.field);
@@ -1671,7 +1670,7 @@ static int fdp1_s_fmt(struct file *file, void *priv, struct v4l2_format *f)
 
 	fdp1_set_format(ctx, &f->fmt.pix_mp, f->type);
 
-	dprintk(ctx->fdp1, "Set %s format: %4s (0x%08x) %ux%u field %u\n",
+	dprintk(ctx->fdp1, "Set %s format: %4.4s (0x%08x) %ux%u field %u\n",
 		V4L2_TYPE_IS_OUTPUT(f->type) ? "output" : "capture",
 		(char *)&f->fmt.pix_mp.pixelformat, f->fmt.pix_mp.pixelformat,
 		f->fmt.pix_mp.width, f->fmt.pix_mp.height, f->fmt.pix_mp.field);
@@ -1733,8 +1732,8 @@ static const char * const fdp1_ctrl_deint_menu[] = {
 static const struct v4l2_ioctl_ops fdp1_ioctl_ops = {
 	.vidioc_querycap	= fdp1_vidioc_querycap,
 
-	.vidioc_enum_fmt_vid_cap_mplane = fdp1_enum_fmt_vid_cap,
-	.vidioc_enum_fmt_vid_out_mplane = fdp1_enum_fmt_vid_out,
+	.vidioc_enum_fmt_vid_cap	= fdp1_enum_fmt_vid_cap,
+	.vidioc_enum_fmt_vid_out	= fdp1_enum_fmt_vid_out,
 	.vidioc_g_fmt_vid_cap_mplane	= fdp1_g_fmt,
 	.vidioc_g_fmt_vid_out_mplane	= fdp1_g_fmt,
 	.vidioc_try_fmt_vid_cap_mplane	= fdp1_try_fmt,
@@ -1996,13 +1995,13 @@ static void fdp1_stop_streaming(struct vb2_queue *q)
 		/* Free smsk_data */
 		if (ctx->smsk_cpu) {
 			dma_free_coherent(ctx->fdp1->dev, ctx->smsk_size,
-					ctx->smsk_cpu, ctx->smsk_addr[0]);
+					  ctx->smsk_cpu, ctx->smsk_addr[0]);
 			ctx->smsk_addr[0] = ctx->smsk_addr[1] = 0;
 			ctx->smsk_cpu = NULL;
 		}
 
 		WARN(!list_empty(&ctx->fields_queue),
-				"Buffer queue not empty");
+		     "Buffer queue not empty");
 	} else {
 		/* Empty Capture queues (Jobs) */
 		struct fdp1_job *job;
@@ -2024,14 +2023,14 @@ static void fdp1_stop_streaming(struct vb2_queue *q)
 		fdp1_field_complete(ctx, ctx->previous);
 
 		WARN(!list_empty(&ctx->fdp1->queued_job_list),
-				"Queued Job List not empty");
+		     "Queued Job List not empty");
 
 		WARN(!list_empty(&ctx->fdp1->hw_job_list),
-				"HW Job list not empty");
+		     "HW Job list not empty");
 	}
 }
 
-static struct vb2_ops fdp1_qops = {
+static const struct vb2_ops fdp1_qops = {
 	.queue_setup	 = fdp1_queue_setup,
 	.buf_prepare	 = fdp1_buf_prepare,
 	.buf_queue	 = fdp1_buf_queue,
@@ -2113,7 +2112,7 @@ static int fdp1_open(struct file *file)
 				     fdp1_ctrl_deint_menu);
 
 	ctrl = v4l2_ctrl_new_std(&ctx->hdl, &fdp1_ctrl_ops,
-			V4L2_CID_MIN_BUFFERS_FOR_CAPTURE, 1, 2, 1, 1);
+				 V4L2_CID_MIN_BUFFERS_FOR_CAPTURE, 1, 2, 1, 1);
 	if (ctrl)
 		ctrl->flags |= V4L2_CTRL_FLAG_VOLATILE;
 
@@ -2342,7 +2341,7 @@ static int fdp1_probe(struct platform_device *pdev)
 	vfd->lock = &fdp1->dev_mutex;
 	vfd->v4l2_dev = &fdp1->v4l2_dev;
 	video_set_drvdata(vfd, fdp1);
-	strlcpy(vfd->name, fdp1_videodev.name, sizeof(vfd->name));
+	strscpy(vfd->name, fdp1_videodev.name, sizeof(vfd->name));
 
 	ret = video_register_device(vfd, VFL_TYPE_GRABBER, 0);
 	if (ret) {
@@ -2350,8 +2349,8 @@ static int fdp1_probe(struct platform_device *pdev)
 		goto release_m2m;
 	}
 
-	v4l2_info(&fdp1->v4l2_dev,
-			"Device registered as /dev/video%d\n", vfd->num);
+	v4l2_info(&fdp1->v4l2_dev, "Device registered as /dev/video%d\n",
+		  vfd->num);
 
 	/* Power up the cells to read HW */
 	pm_runtime_enable(&pdev->dev);
@@ -2359,15 +2358,24 @@ static int fdp1_probe(struct platform_device *pdev)
 
 	hw_version = fdp1_read(fdp1, FD1_IP_INTDATA);
 	switch (hw_version) {
-	case FD1_IP_H3:
-		dprintk(fdp1, "FDP1 Version R-Car H3\n");
+	case FD1_IP_H3_ES1:
+		dprintk(fdp1, "FDP1 Version R-Car H3 ES1\n");
 		break;
 	case FD1_IP_M3W:
 		dprintk(fdp1, "FDP1 Version R-Car M3-W\n");
 		break;
+	case FD1_IP_H3:
+		dprintk(fdp1, "FDP1 Version R-Car H3\n");
+		break;
+	case FD1_IP_M3N:
+		dprintk(fdp1, "FDP1 Version R-Car M3N\n");
+		break;
+	case FD1_IP_E3:
+		dprintk(fdp1, "FDP1 Version R-Car E3\n");
+		break;
 	default:
 		dev_err(fdp1->dev, "FDP1 Unidentifiable (0x%08x)\n",
-				hw_version);
+			hw_version);
 	}
 
 	/* Allow the hw to sleep until an open call puts it to use */

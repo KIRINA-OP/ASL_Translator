@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * RTL8XXXU mac80211 USB driver
  *
- * Copyright (c) 2014 - 2016 Jes Sorensen <Jes.Sorensen@redhat.com>
+ * Copyright (c) 2014 - 2017 Jes Sorensen <Jes.Sorensen@gmail.com>
  *
  * Portions, notably calibration code:
  * Copyright(c) 2007 - 2011 Realtek Corporation. All rights reserved.
@@ -10,15 +11,6 @@
  * rtl8723au driver. As the Realtek 8xxx chips are very similar in
  * their programming interface, I have started adding support for
  * additional 8xxx chips like the 8192cu, 8188cus, etc.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of version 2 of the GNU General Public License as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
- * more details.
  */
 
 #include <linux/init.h>
@@ -48,7 +40,7 @@ static bool rtl8xxxu_dma_aggregation;
 static int rtl8xxxu_dma_agg_timeout = -1;
 static int rtl8xxxu_dma_agg_pages = -1;
 
-MODULE_AUTHOR("Jes Sorensen <Jes.Sorensen@redhat.com>");
+MODULE_AUTHOR("Jes Sorensen <Jes.Sorensen@gmail.com>");
 MODULE_DESCRIPTION("RTL8XXXu USB mac80211 Wireless LAN Driver");
 MODULE_LICENSE("GPL");
 MODULE_FIRMWARE("rtlwifi/rtl8723aufw_A.bin");
@@ -1153,6 +1145,7 @@ void rtl8xxxu_gen1_config_channel(struct ieee80211_hw *hw)
 	switch (hw->conf.chandef.width) {
 	case NL80211_CHAN_WIDTH_20_NOHT:
 		ht = false;
+		/* fall through */
 	case NL80211_CHAN_WIDTH_20:
 		opmode |= BW_OPMODE_20MHZ;
 		rtl8xxxu_write8(priv, REG_BW_OPMODE, opmode);
@@ -1280,6 +1273,7 @@ void rtl8xxxu_gen2_config_channel(struct ieee80211_hw *hw)
 	switch (hw->conf.chandef.width) {
 	case NL80211_CHAN_WIDTH_20_NOHT:
 		ht = false;
+		/* fall through */
 	case NL80211_CHAN_WIDTH_20:
 		rf_mode_bw |= WMAC_TRXPTCL_CTL_BW_20;
 		subchannel = 0;
@@ -1748,9 +1742,11 @@ static int rtl8xxxu_identify_chip(struct rtl8xxxu_priv *priv)
 		case 3:
 			priv->ep_tx_low_queue = 1;
 			priv->ep_tx_count++;
+			/* fall through */
 		case 2:
 			priv->ep_tx_normal_queue = 1;
 			priv->ep_tx_count++;
+			/* fall through */
 		case 1:
 			priv->ep_tx_high_queue = 1;
 			priv->ep_tx_count++;
@@ -3406,8 +3402,8 @@ void rtl8xxxu_gen1_phy_iq_calibrate(struct rtl8xxxu_priv *priv)
 		reg_ecc = result[candidate][7];
 		dev_dbg(dev, "%s: candidate is %x\n", __func__, candidate);
 		dev_dbg(dev,
-			"%s: e94 =%x e9c=%x ea4=%x eac=%x eb4=%x ebc=%x ec4=%x "
-			"ecc=%x\n ", __func__, reg_e94, reg_e9c,
+			"%s: e94 =%x e9c=%x ea4=%x eac=%x eb4=%x ebc=%x ec4=%x ecc=%x\n",
+			__func__, reg_e94, reg_e9c,
 			reg_ea4, reg_eac, reg_eb4, reg_ebc, reg_ec4, reg_ecc);
 		path_a_ok = true;
 		path_b_ok = true;
@@ -4431,7 +4427,7 @@ void rtl8xxxu_gen1_init_aggregation(struct rtl8xxxu_priv *priv)
 			timeout = page_thresh;
 		else if (rtl8xxxu_dma_agg_pages <= 6)
 			dev_err(&priv->udev->dev,
-				"%s: dma_agg_pages=%i too small, minium is 6\n",
+				"%s: dma_agg_pages=%i too small, minimum is 6\n",
 				__func__, rtl8xxxu_dma_agg_pages);
 		else
 			dev_err(&priv->udev->dev,
@@ -4918,11 +4914,10 @@ static void rtl8xxxu_tx(struct ieee80211_hw *hw,
 	struct device *dev = &priv->udev->dev;
 	u32 queue, rts_rate;
 	u16 pktlen = skb->len;
-	u16 seq_number;
 	u16 rate_flag = tx_info->control.rates[0].flags;
 	int tx_desc_size = priv->fops->tx_desc_size;
 	int ret;
-	bool usedesc40, ampdu_enable, sgi = false, short_preamble = false;
+	bool ampdu_enable, sgi = false, short_preamble = false;
 
 	if (skb_headroom(skb) < tx_desc_size) {
 		dev_warn(dev,
@@ -4946,13 +4941,12 @@ static void rtl8xxxu_tx(struct ieee80211_hw *hw,
 	if (ieee80211_is_action(hdr->frame_control))
 		rtl8xxxu_dump_action(dev, hdr);
 
-	usedesc40 = (tx_desc_size == 40);
 	tx_info->rate_driver_data[0] = hw;
 
 	if (control && control->sta)
 		sta = control->sta;
 
-	tx_desc = (struct rtl8xxxu_txdesc32 *)skb_push(skb, tx_desc_size);
+	tx_desc = skb_push(skb, tx_desc_size);
 
 	memset(tx_desc, 0, tx_desc_size);
 	tx_desc->pkt_size = cpu_to_le16(pktlen);
@@ -5013,7 +5007,6 @@ static void rtl8xxxu_tx(struct ieee80211_hw *hw,
 	else
 		rts_rate = 0;
 
-	seq_number = IEEE80211_SEQ_TO_SN(le16_to_cpu(hdr->seq_ctrl));
 
 	priv->fops->fill_txdesc(hw, hdr, tx_info, tx_desc, sgi, short_preamble,
 				ampdu_enable, rts_rate);
@@ -5041,7 +5034,7 @@ static void rtl8xxxu_rx_parse_phystats(struct rtl8xxxu_priv *priv,
 				       u32 rxmcs)
 {
 	if (phy_stats->sgi_en)
-		rx_status->flag |= RX_FLAG_SHORT_GI;
+		rx_status->enc_flags |= RX_ENC_FLAG_SHORT_GI;
 
 	if (rxmcs < DESC_RATE_6M) {
 		/*
@@ -5267,10 +5260,10 @@ int rtl8xxxu_parse_rxdesc16(struct rtl8xxxu_priv *priv, struct sk_buff *skb)
 		if (rx_desc->crc32)
 			rx_status->flag |= RX_FLAG_FAILED_FCS_CRC;
 		if (rx_desc->bw)
-			rx_status->flag |= RX_FLAG_40MHZ;
+			rx_status->bw = RATE_INFO_BW_40;
 
 		if (rx_desc->rxht) {
-			rx_status->flag |= RX_FLAG_HT;
+			rx_status->encoding = RX_ENC_HT;
 			rx_status->rate_idx = rx_desc->rxmcs - DESC_RATE_MCS0;
 		} else {
 			rx_status->rate_idx = rx_desc->rxmcs;
@@ -5337,10 +5330,10 @@ int rtl8xxxu_parse_rxdesc24(struct rtl8xxxu_priv *priv, struct sk_buff *skb)
 	if (rx_desc->crc32)
 		rx_status->flag |= RX_FLAG_FAILED_FCS_CRC;
 	if (rx_desc->bw)
-		rx_status->flag |= RX_FLAG_40MHZ;
+		rx_status->bw = RATE_INFO_BW_40;
 
 	if (rx_desc->rxmcs >= DESC_RATE_MCS0) {
-		rx_status->flag |= RX_FLAG_HT;
+		rx_status->encoding = RX_ENC_HT;
 		rx_status->rate_idx = rx_desc->rxmcs - DESC_RATE_MCS0;
 	} else {
 		rx_status->rate_idx = rx_desc->rxmcs;
@@ -5691,6 +5684,7 @@ static int rtl8xxxu_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 		break;
 	case WLAN_CIPHER_SUITE_TKIP:
 		key->flags |= IEEE80211_KEY_FLAG_GENERATE_MMIC;
+		break;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -6000,6 +5994,7 @@ static int rtl8xxxu_probe(struct usb_interface *interface,
 		case 0x8176:
 		case 0x8178:
 		case 0x817f:
+		case 0x818b:
 			untested = 0;
 			break;
 		}
@@ -6134,6 +6129,8 @@ static int rtl8xxxu_probe(struct usb_interface *interface,
 	ieee80211_hw_set(hw, HAS_RATE_CONTROL);
 	ieee80211_hw_set(hw, AMPDU_AGGREGATION);
 
+	wiphy_ext_feature_set(hw->wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
+
 	ret = ieee80211_register_hw(priv->hw);
 	if (ret) {
 		dev_err(&udev->dev, "%s: Failed to register: %i\n",
@@ -6187,7 +6184,7 @@ static void rtl8xxxu_disconnect(struct usb_interface *interface)
 	ieee80211_free_hw(hw);
 }
 
-static struct usb_device_id dev_table[] = {
+static const struct usb_device_id dev_table[] = {
 {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x8724, 0xff, 0xff, 0xff),
 	.driver_info = (unsigned long)&rtl8723au_fops},
 {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x1724, 0xff, 0xff, 0xff),
@@ -6195,6 +6192,12 @@ static struct usb_device_id dev_table[] = {
 {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x0724, 0xff, 0xff, 0xff),
 	.driver_info = (unsigned long)&rtl8723au_fops},
 {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x818b, 0xff, 0xff, 0xff),
+	.driver_info = (unsigned long)&rtl8192eu_fops},
+/* TP-Link TL-WN822N v4 */
+{USB_DEVICE_AND_INTERFACE_INFO(0x2357, 0x0108, 0xff, 0xff, 0xff),
+	.driver_info = (unsigned long)&rtl8192eu_fops},
+/* D-Link DWA-131 rev E1, tested by David Patiño */
+{USB_DEVICE_AND_INTERFACE_INFO(0x2001, 0x3319, 0xff, 0xff, 0xff),
 	.driver_info = (unsigned long)&rtl8192eu_fops},
 /* Tested by Myckel Habets */
 {USB_DEVICE_AND_INTERFACE_INFO(0x2357, 0x0109, 0xff, 0xff, 0xff),
@@ -6222,6 +6225,8 @@ static struct usb_device_id dev_table[] = {
 {USB_DEVICE_AND_INTERFACE_INFO(0x2001, 0x3308, 0xff, 0xff, 0xff),
 	.driver_info = (unsigned long)&rtl8192cu_fops},
 /* Currently untested 8188 series devices */
+{USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x018a, 0xff, 0xff, 0xff),
+	.driver_info = (unsigned long)&rtl8192cu_fops},
 {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x8191, 0xff, 0xff, 0xff),
 	.driver_info = (unsigned long)&rtl8192cu_fops},
 {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x8170, 0xff, 0xff, 0xff),
@@ -6347,6 +6352,13 @@ static struct usb_device_id dev_table[] = {
 	.driver_info = (unsigned long)&rtl8192cu_fops},
 {USB_DEVICE_AND_INTERFACE_INFO(0x7392, 0x7822, 0xff, 0xff, 0xff),
 	.driver_info = (unsigned long)&rtl8192cu_fops},
+/* found in rtl8192eu vendor driver */
+{USB_DEVICE_AND_INTERFACE_INFO(0x2357, 0x0107, 0xff, 0xff, 0xff),
+	.driver_info = (unsigned long)&rtl8192eu_fops},
+{USB_DEVICE_AND_INTERFACE_INFO(0x2019, 0xab33, 0xff, 0xff, 0xff),
+	.driver_info = (unsigned long)&rtl8192eu_fops},
+{USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x818c, 0xff, 0xff, 0xff),
+	.driver_info = (unsigned long)&rtl8192eu_fops},
 #endif
 { }
 };

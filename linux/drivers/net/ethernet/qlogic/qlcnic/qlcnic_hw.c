@@ -276,13 +276,6 @@ static const unsigned crb_hub_agt[64] = {
 	0,
 };
 
-static const u32 msi_tgt_status[8] = {
-	ISR_INT_TARGET_STATUS, ISR_INT_TARGET_STATUS_F1,
-	ISR_INT_TARGET_STATUS_F2, ISR_INT_TARGET_STATUS_F3,
-	ISR_INT_TARGET_STATUS_F4, ISR_INT_TARGET_STATUS_F5,
-	ISR_INT_TARGET_STATUS_F6, ISR_INT_TARGET_STATUS_F7
-};
-
 /*  PCI Windowing for DDR regions.  */
 
 #define QLCNIC_PCIE_SEM_TIMEOUT	10000
@@ -341,7 +334,7 @@ qlcnic_pcie_sem_lock(struct qlcnic_adapter *adapter, int sem, u32 id_reg)
 			}
 			return -EIO;
 		}
-		usleep_range(1000, 1500);
+		udelay(1200);
 	}
 
 	if (id_reg)

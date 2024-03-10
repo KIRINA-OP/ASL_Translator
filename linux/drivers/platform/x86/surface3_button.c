@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Supports for the button array on the Surface tablets.
  *
@@ -6,11 +7,6 @@
  * Based on soc_button_array.c:
  *
  * {C} Copyright 2014 Intel Corporation
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; version 2
- * of the License.
  */
 
 #include <linux/module.h>
@@ -196,9 +192,10 @@ static int surface3_button_probe(struct i2c_client *client,
 		    strlen(SURFACE_BUTTON_OBJ_NAME)))
 		return -ENODEV;
 
-	if (gpiod_count(dev, KBUILD_MODNAME) <= 0) {
+	error = gpiod_count(dev, NULL);
+	if (error < 0) {
 		dev_dbg(dev, "no GPIO attached, ignoring...\n");
-		return -ENODEV;
+		return error;
 	}
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);

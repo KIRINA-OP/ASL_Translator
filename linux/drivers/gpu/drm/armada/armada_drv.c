@@ -1,67 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012 Russell King
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
-#include <drm/drmP.h>
-#include <drm/drm_crtc_helper.h>
+#include <drm/drm_atomic_helper.h>
+#include <drm/drm_probe_helper.h>
+#include <drm/drm_fb_helper.h>
 #include <drm/drm_of.h>
 #include "armada_crtc.h"
 #include "armada_drm.h"
 #include "armada_gem.h"
+#include "armada_fb.h"
 #include "armada_hw.h"
 #include <drm/armada_drm.h>
 #include "armada_ioctlP.h"
-
-static void armada_drm_unref_work(struct work_struct *work)
-{
-	struct armada_private *priv =
-		container_of(work, struct armada_private, fb_unref_work);
-	struct drm_framebuffer *fb;
-
-	while (kfifo_get(&priv->fb_unref, &fb))
-		drm_framebuffer_unreference(fb);
-}
-
-/* Must be called with dev->event_lock held */
-void __armada_drm_queue_unref_work(struct drm_device *dev,
-	struct drm_framebuffer *fb)
-{
-	struct armada_private *priv = dev->dev_private;
-
-	WARN_ON(!kfifo_put(&priv->fb_unref, fb));
-	schedule_work(&priv->fb_unref_work);
-}
-
-void armada_drm_queue_unref_work(struct drm_device *dev,
-	struct drm_framebuffer *fb)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&dev->event_lock, flags);
-	__armada_drm_queue_unref_work(dev, fb);
-	spin_unlock_irqrestore(&dev->event_lock, flags);
-}
-
-/* These are called under the vbl_lock. */
-static int armada_drm_enable_vblank(struct drm_device *dev, unsigned int pipe)
-{
-	struct armada_private *priv = dev->dev_private;
-	armada_drm_crtc_enable_irq(priv->dcrtc[pipe], VSYNC_IRQ_ENA);
-	return 0;
-}
-
-static void armada_drm_disable_vblank(struct drm_device *dev, unsigned int pipe)
-{
-	struct armada_private *priv = dev->dev_private;
-	armada_drm_crtc_disable_irq(priv->dcrtc[pipe], VSYNC_IRQ_ENA);
-}
 
 static struct drm_ioctl_desc armada_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(ARMADA_GEM_CREATE, armada_gem_create_ioctl,0),
@@ -69,35 +24,16 @@ static struct drm_ioctl_desc armada_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(ARMADA_GEM_PWRITE, armada_gem_pwrite_ioctl, 0),
 };
 
-static void armada_drm_lastclose(struct drm_device *dev)
-{
-	armada_fbdev_lastclose(dev);
-}
-
-static const struct file_operations armada_drm_fops = {
-	.owner			= THIS_MODULE,
-	.llseek			= no_llseek,
-	.read			= drm_read,
-	.poll			= drm_poll,
-	.unlocked_ioctl		= drm_ioctl,
-	.mmap			= drm_gem_mmap,
-	.open			= drm_open,
-	.release		= drm_release,
-};
+DEFINE_DRM_GEM_FOPS(armada_drm_fops);
 
 static struct drm_driver armada_drm_driver = {
-	.lastclose		= armada_drm_lastclose,
-	.get_vblank_counter	= drm_vblank_no_hw_counter,
-	.enable_vblank		= armada_drm_enable_vblank,
-	.disable_vblank		= armada_drm_disable_vblank,
+	.lastclose		= drm_fb_helper_lastclose,
 	.gem_free_object_unlocked = armada_gem_free_object,
 	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd,
 	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle,
 	.gem_prime_export	= armada_gem_prime_export,
 	.gem_prime_import	= armada_gem_prime_import,
 	.dumb_create		= armada_gem_dumb_create,
-	.dumb_map_offset	= armada_gem_dumb_map_offset,
-	.dumb_destroy		= armada_gem_dumb_destroy,
 	.gem_vm_ops		= &armada_gem_vm_ops,
 	.major			= 1,
 	.minor			= 0,
@@ -105,9 +41,16 @@ static struct drm_driver armada_drm_driver = {
 	.desc			= "Armada SoC DRM",
 	.date			= "20120730",
 	.driver_features	= DRIVER_GEM | DRIVER_MODESET |
-				  DRIVER_PRIME,
+				  DRIVER_PRIME | DRIVER_ATOMIC,
 	.ioctls			= armada_ioctls,
 	.fops			= &armada_drm_fops,
+};
+
+static const struct drm_mode_config_funcs armada_drm_mode_config_funcs = {
+	.fb_create		= armada_fb_create,
+	.output_poll_changed	= drm_fb_helper_output_poll_changed,
+	.atomic_check		= drm_atomic_helper_check,
+	.atomic_commit		= drm_atomic_helper_commit,
 };
 
 static int armada_drm_bind(struct device *dev)
@@ -142,7 +85,7 @@ static int armada_drm_bind(struct device *dev)
 
 	/*
 	 * The drm_device structure must be at the start of
-	 * armada_private for drm_dev_unref() to work correctly.
+	 * armada_private for drm_dev_put() to work correctly.
 	 */
 	BUILD_BUG_ON(offsetof(struct armada_private, drm) != 0);
 
@@ -154,13 +97,9 @@ static int armada_drm_bind(struct device *dev)
 		return ret;
 	}
 
-	priv->drm.platformdev = to_platform_device(dev);
 	priv->drm.dev_private = priv;
 
-	platform_set_drvdata(priv->drm.platformdev, &priv->drm);
-
-	INIT_WORK(&priv->fb_unref_work, armada_drm_unref_work);
-	INIT_KFIFO(priv->fb_unref);
+	dev_set_drvdata(dev, &priv->drm);
 
 	/* Mode setting support */
 	drm_mode_config_init(&priv->drm);
@@ -189,6 +128,8 @@ static int armada_drm_bind(struct device *dev)
 
 	priv->drm.irq_enabled = true;
 
+	drm_mode_config_reset(&priv->drm);
+
 	ret = armada_fbdev_init(&priv->drm);
 	if (ret)
 		goto err_comp;
@@ -203,12 +144,6 @@ static int armada_drm_bind(struct device *dev)
 	armada_drm_debugfs_init(priv->drm.primary);
 #endif
 
-	DRM_INFO("Initialized %s %d.%d.%d %s for %s on minor %d\n",
-		 armada_drm_driver.name, armada_drm_driver.major,
-		 armada_drm_driver.minor, armada_drm_driver.patchlevel,
-		 armada_drm_driver.date, dev_name(dev),
-		 priv->drm.primary->index);
-
 	return 0;
 
  err_poll:
@@ -219,8 +154,7 @@ static int armada_drm_bind(struct device *dev)
  err_kms:
 	drm_mode_config_cleanup(&priv->drm);
 	drm_mm_takedown(&priv->linear);
-	flush_work(&priv->fb_unref_work);
-	drm_dev_unref(&priv->drm);
+	drm_dev_put(&priv->drm);
 	return ret;
 }
 
@@ -232,18 +166,14 @@ static void armada_drm_unbind(struct device *dev)
 	drm_kms_helper_poll_fini(&priv->drm);
 	armada_fbdev_fini(&priv->drm);
 
-#ifdef CONFIG_DEBUG_FS
-	armada_drm_debugfs_cleanup(priv->drm.primary);
-#endif
 	drm_dev_unregister(&priv->drm);
 
 	component_unbind_all(dev, &priv->drm);
 
 	drm_mode_config_cleanup(&priv->drm);
 	drm_mm_takedown(&priv->linear);
-	flush_work(&priv->fb_unref_work);
 
-	drm_dev_unref(&priv->drm);
+	drm_dev_put(&priv->drm);
 }
 
 static int compare_of(struct device *dev, void *data)
@@ -268,8 +198,8 @@ static void armada_add_endpoints(struct device *dev,
 			of_node_put(remote);
 			continue;
 		} else if (!of_device_is_available(remote->parent)) {
-			dev_warn(dev, "parent device of %s is not available\n",
-				 remote->full_name);
+			dev_warn(dev, "parent device of %pOF is not available\n",
+				 remote);
 			of_node_put(remote);
 			continue;
 		}

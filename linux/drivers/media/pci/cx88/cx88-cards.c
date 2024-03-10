@@ -1,18 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * device driver for Conexant 2388x based TV cards
  * card-specific stuff.
  *
  * (c) 2003 Gerd Knorr <kraxel@bytesex.org> [SuSE Labs]
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
  */
 
 #include "cx88.h"
@@ -2854,7 +2845,7 @@ static void hauppauge_eeprom(struct cx88_core *core, u8 *eeprom_data)
 {
 	struct tveeprom tv;
 
-	tveeprom_hauppauge_analog(&core->i2c_client, &tv, eeprom_data);
+	tveeprom_hauppauge_analog(&tv, eeprom_data);
 	core->board.tuner_type = tv.tuner_type;
 	core->tuner_formats = tv.tuner_formats;
 	core->board.radio.type = tv.has_radio ? CX88_RADIO : 0;
@@ -3307,9 +3298,9 @@ static void cx88_card_setup_pre_i2c(struct cx88_core *core)
 	case CX88_BOARD_PROLINK_PV_GLOBAL_XTREME:
 	case CX88_BOARD_PROLINK_PV_8000GT:
 		cx_write(MO_GP2_IO, 0xcf7);
-		mdelay(50);
+		msleep(50);
 		cx_write(MO_GP2_IO, 0xef5);
-		mdelay(50);
+		msleep(50);
 		cx_write(MO_GP2_IO, 0xcf7);
 		usleep_range(10000, 20000);
 		break;
@@ -3592,7 +3583,7 @@ static void cx88_card_setup(struct cx88_core *core)
 			ctl.fname);
 		call_all(core, tuner, s_config, &xc2028_cfg);
 	}
-	call_all(core, core, s_power, 0);
+	call_all(core, tuner, standby);
 }
 
 /* ------------------------------------------------------------------ */
@@ -3670,7 +3661,7 @@ struct cx88_core *cx88_core_create(struct pci_dev *pci, int nr)
 	if (!core)
 		return NULL;
 
-	atomic_inc(&core->refcount);
+	refcount_set(&core->refcount, 1);
 	core->pci_bus  = pci->bus->number;
 	core->pci_slot = PCI_SLOT(pci->devfn);
 	core->pci_irqmask = PCI_INT_RISC_RD_BERRINT | PCI_INT_RISC_WR_BERRINT |
@@ -3681,12 +3672,19 @@ struct cx88_core *cx88_core_create(struct pci_dev *pci, int nr)
 	core->nr = nr;
 	sprintf(core->name, "cx88[%d]", core->nr);
 
-	core->tvnorm = V4L2_STD_NTSC_M;
+	/*
+	 * Note: Setting initial standard here would cause first call to
+	 * cx88_set_tvnorm() to return without programming any registers.  Leave
+	 * it blank for at this point and it will get set later in
+	 * cx8800_initdev()
+	 */
+	core->tvnorm  = 0;
+
 	core->width   = 320;
 	core->height  = 240;
 	core->field   = V4L2_FIELD_INTERLACED;
 
-	strcpy(core->v4l2_dev.name, core->name);
+	strscpy(core->v4l2_dev.name, core->name, sizeof(core->v4l2_dev.name));
 	if (v4l2_device_register(NULL, &core->v4l2_dev)) {
 		kfree(core);
 		return NULL;

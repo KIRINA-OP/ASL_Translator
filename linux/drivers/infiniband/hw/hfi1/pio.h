@@ -1,7 +1,7 @@
 #ifndef _PIO_H
 #define _PIO_H
 /*
- * Copyright(c) 2015, 2016 Intel Corporation.
+ * Copyright(c) 2015-2017 Intel Corporation.
  *
  * This file is provided under a dual BSD/GPLv2 license.  When using or
  * redistributing this file, you may do so under either license.
@@ -127,6 +127,8 @@ struct send_context {
 	volatile __le64 *hw_free;	/* HW free counter */
 	/* list for PIO waiters */
 	struct list_head piowait  ____cacheline_aligned_in_smp;
+	seqlock_t waitlock;
+
 	spinlock_t credit_ctrl_lock ____cacheline_aligned_in_smp;
 	u32 credit_intr_count;		/* count of credit intr users */
 	u64 credit_ctrl;		/* cache for credit control */
@@ -139,6 +141,7 @@ struct send_context {
 #define SCF_IN_FREE 0x02
 #define SCF_HALTED  0x04
 #define SCF_FROZEN  0x08
+#define SCF_LINK_DOWN 0x10
 
 struct send_context_info {
 	struct send_context *sc;	/* allocated working context */
@@ -195,7 +198,7 @@ struct sc_config_sizes {
  *      |    mask                  |              --/  |--------------------|
  *      |--------------------------|            -/     |        *           |
  *      |    actual_vls (max 8)    |          -/       |--------------------|
- *      |--------------------------|       --/         | ksc[n] -> sc n     |
+ *      |--------------------------|       --/         | ksc[n-1] -> sc n   |
  *      |    vls (max 8)           |     -/            +--------------------+
  *      |--------------------------|  --/
  *      |    map[0]                |-/
@@ -208,21 +211,21 @@ struct sc_config_sizes {
  *      |--------------------------|                   |--------------------|
  *      |   map[vls - 1]           |-                  |         *          |
  *      +--------------------------+ \-                |--------------------|
- *                                     \-              | ksc[m] -> sc m+n   |
+ *                                     \-              | ksc[m-1] -> sc m+n |
  *                                       \             +--------------------+
  *                                        \-
  *                                          \
- *                                           \-        +--------------------+
- *                                             \-      |       mask         |
- *                                               \     |--------------------|
- *                                                \-   | ksc[0] -> sc 1+m+n |
- *                                                  \- |--------------------|
- *                                                    >| ksc[1] -> sc 2+m+n |
- *                                                     |--------------------|
- *                                                     |         *          |
- *                                                     |--------------------|
- *                                                     | ksc[o] -> sc o+m+n |
- *                                                     +--------------------+
+ *                                           \-        +----------------------+
+ *                                             \-      |       mask           |
+ *                                               \     |----------------------|
+ *                                                \-   | ksc[0] -> sc 1+m+n   |
+ *                                                  \- |----------------------|
+ *                                                    >| ksc[1] -> sc 2+m+n   |
+ *                                                     |----------------------|
+ *                                                     |         *            |
+ *                                                     |----------------------|
+ *                                                     | ksc[o-1] -> sc o+m+n |
+ *                                                     +----------------------+
  *
  */
 
@@ -306,6 +309,7 @@ void set_pio_integrity(struct send_context *sc);
 void pio_reset_all(struct hfi1_devdata *dd);
 void pio_freeze(struct hfi1_devdata *dd);
 void pio_kernel_unfreeze(struct hfi1_devdata *dd);
+void pio_kernel_linkup(struct hfi1_devdata *dd);
 
 /* global PIO send control operations */
 #define PSC_GLOBAL_ENABLE 0
@@ -326,5 +330,8 @@ void seg_pio_copy_start(struct pio_buf *pbuf, u64 pbc,
 			const void *from, size_t nbytes);
 void seg_pio_copy_mid(struct pio_buf *pbuf, const void *from, size_t nbytes);
 void seg_pio_copy_end(struct pio_buf *pbuf);
+
+void seqfile_dump_sci(struct seq_file *s, u32 i,
+		      struct send_context_info *sci);
 
 #endif /* _PIO_H */

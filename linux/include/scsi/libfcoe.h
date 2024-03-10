@@ -1,19 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2008 Intel Corporation.  All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Maintained at www.Open-FCoE.org
  */
@@ -79,7 +67,7 @@ enum fip_state {
  * It must not change after fcoe_ctlr_init() sets it.
  */
 enum fip_mode {
-	FIP_MODE_AUTO = FIP_ST_AUTO,
+	FIP_MODE_AUTO,
 	FIP_MODE_NON_FIP,
 	FIP_MODE_FABRIC,
 	FIP_MODE_VN2VN,
@@ -250,7 +238,7 @@ struct fcoe_rport {
 };
 
 /* FIP API functions */
-void fcoe_ctlr_init(struct fcoe_ctlr *, enum fip_state);
+void fcoe_ctlr_init(struct fcoe_ctlr *, enum fip_mode);
 void fcoe_ctlr_destroy(struct fcoe_ctlr *);
 void fcoe_ctlr_link_up(struct fcoe_ctlr *);
 int fcoe_ctlr_link_down(struct fcoe_ctlr *);
@@ -382,7 +370,7 @@ static inline struct net_device *fcoe_get_netdev(const struct fc_lport *lport)
 
 void fcoe_clean_pending_queue(struct fc_lport *);
 void fcoe_check_wait_queue(struct fc_lport *lport, struct sk_buff *skb);
-void fcoe_queue_timer(ulong lport);
+void fcoe_queue_timer(struct timer_list *t);
 int fcoe_get_paged_crc_eof(struct sk_buff *skb, int tlen,
 			   struct fcoe_percpu_s *fps);
 

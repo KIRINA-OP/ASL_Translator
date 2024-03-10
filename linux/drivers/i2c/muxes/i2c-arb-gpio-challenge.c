@@ -1,17 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * GPIO-based I2C Arbitration Using a Challenge & Response Mechanism
  *
  * Copyright (C) 2012 Google, Inc
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/delay.h>
@@ -202,10 +193,8 @@ static int i2c_arbitrator_probe(struct platform_device *pdev)
 
 	/* Actually add the mux adapter */
 	ret = i2c_mux_add_adapter(muxc, 0, 0, 0);
-	if (ret) {
-		dev_err(dev, "Failed to add adapter\n");
+	if (ret)
 		i2c_put_adapter(muxc->parent);
-	}
 
 	return ret;
 }

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/kernel.h>
 #include <linux/sizes.h>
 
@@ -7,26 +8,27 @@
 
 #define MHz(x) ((x) * 1000000)
 
-static logical_chip_type_t chip;
+static enum logical_chip_type chip;
 
-logical_chip_type_t sm750_get_chip_type(void)
+enum logical_chip_type sm750_get_chip_type(void)
 {
 	return chip;
 }
 
-void sm750_set_chip_type(unsigned short devId, u8 revId)
+void sm750_set_chip_type(unsigned short dev_id, u8 rev_id)
 {
-	if (devId == 0x718)
+	if (dev_id == 0x718) {
 		chip = SM718;
-	else if (devId == 0x750) {
+	} else if (dev_id == 0x750) {
 		chip = SM750;
 		/* SM750 and SM750LE are different in their revision ID only. */
-		if (revId == SM750LE_REVISION_ID) {
+		if (rev_id == SM750LE_REVISION_ID) {
 			chip = SM750LE;
 			pr_info("found sm750le\n");
 		}
-	} else
+	} else {
 		chip = SM_UNKNOWN;
+	}
 }
 
 static unsigned int get_mxclk_freq(void)
@@ -37,13 +39,13 @@ static unsigned int get_mxclk_freq(void)
 	if (sm750_get_chip_type() == SM750LE)
 		return MHz(130);
 
-	pll_reg = PEEK32(MXCLK_PLL_CTRL);
+	pll_reg = peek32(MXCLK_PLL_CTRL);
 	M = (pll_reg & PLL_CTRL_M_MASK) >> PLL_CTRL_M_SHIFT;
-	N = (pll_reg & PLL_CTRL_N_MASK) >> PLL_CTRL_M_SHIFT;
+	N = (pll_reg & PLL_CTRL_N_MASK) >> PLL_CTRL_N_SHIFT;
 	OD = (pll_reg & PLL_CTRL_OD_MASK) >> PLL_CTRL_OD_SHIFT;
 	POD = (pll_reg & PLL_CTRL_POD_MASK) >> PLL_CTRL_POD_SHIFT;
 
-	return DEFAULT_INPUT_CLOCK * M / N / (1 << OD) / (1 << POD);
+	return DEFAULT_INPUT_CLOCK * M / N / BIT(OD) / BIT(POD);
 }
 
 /*
@@ -54,7 +56,7 @@ static unsigned int get_mxclk_freq(void)
 static void set_chip_clock(unsigned int frequency)
 {
 	struct pll_value pll;
-	unsigned int ulActualMxClk;
+	unsigned int actual_mx_clk;
 
 	/* Cheok_0509: For SM750LE, the chip clock is fixed. Nothing to set. */
 	if (sm750_get_chip_type() == SM750LE)
@@ -68,16 +70,16 @@ static void set_chip_clock(unsigned int frequency)
 		pll.clockType = MXCLK_PLL;
 
 		/*
-		 * Call sm750_calc_pll_value() to fill the other fields of the PLL
-		 * structure. Sometimes, the chip cannot set up the exact
-		 * clock required by the User.
-		 * Return value of sm750_calc_pll_value gives the actual possible
-		 * clock.
+		 * Call sm750_calc_pll_value() to fill the other fields
+		 * of the PLL structure. Sometimes, the chip cannot set
+		 * up the exact clock required by the User.
+		 * Return value of sm750_calc_pll_value gives the actual
+		 * possible clock.
 		 */
-		ulActualMxClk = sm750_calc_pll_value(frequency, &pll);
+		actual_mx_clk = sm750_calc_pll_value(frequency, &pll);
 
 		/* Master Clock Control: MXCLK_PLL */
-		POKE32(MXCLK_PLL_CTRL, sm750_format_pll_reg(&pll));
+		poke32(MXCLK_PLL_CTRL, sm750_format_pll_reg(&pll));
 	}
 }
 
@@ -104,7 +106,7 @@ static void set_memory_clock(unsigned int frequency)
 		divisor = DIV_ROUND_CLOSEST(get_mxclk_freq(), frequency);
 
 		/* Set the corresponding divisor in the register. */
-		reg = PEEK32(CURRENT_GATE) & ~CURRENT_GATE_M2XCLK_MASK;
+		reg = peek32(CURRENT_GATE) & ~CURRENT_GATE_M2XCLK_MASK;
 		switch (divisor) {
 		default:
 		case 1:
@@ -156,7 +158,7 @@ static void set_master_clock(unsigned int frequency)
 		divisor = DIV_ROUND_CLOSEST(get_mxclk_freq(), frequency);
 
 		/* Set the corresponding divisor in the register. */
-		reg = PEEK32(CURRENT_GATE) & ~CURRENT_GATE_MCLK_MASK;
+		reg = peek32(CURRENT_GATE) & ~CURRENT_GATE_MCLK_MASK;
 		switch (divisor) {
 		default:
 		case 3:
@@ -174,7 +176,7 @@ static void set_master_clock(unsigned int frequency)
 		}
 
 		sm750_set_current_gate(reg);
-		}
+	}
 }
 
 unsigned int ddk750_get_vm_size(void)
@@ -187,12 +189,12 @@ unsigned int ddk750_get_vm_size(void)
 		return SZ_64M;
 
 	/* for 750,always use power mode0*/
-	reg = PEEK32(MODE0_GATE);
+	reg = peek32(MODE0_GATE);
 	reg |= MODE0_GATE_GPIO;
-	POKE32(MODE0_GATE, reg);
+	poke32(MODE0_GATE, reg);
 
 	/* get frame buffer size from GPIO */
-	reg = PEEK32(MISC_CTRL) & MISC_CTRL_LOCALMEM_SIZE_MASK;
+	reg = peek32(MISC_CTRL) & MISC_CTRL_LOCALMEM_SIZE_MASK;
 	switch (reg) {
 	case MISC_CTRL_LOCALMEM_SIZE_8M:
 		data = SZ_8M;  break; /* 8  Mega byte */
@@ -218,15 +220,15 @@ int ddk750_init_hw(struct initchip_param *pInitParam)
 	sm750_set_power_mode(pInitParam->powerMode);
 
 	/* Enable display power gate & LOCALMEM power gate*/
-	reg = PEEK32(CURRENT_GATE);
+	reg = peek32(CURRENT_GATE);
 	reg |= (CURRENT_GATE_DISPLAY | CURRENT_GATE_LOCALMEM);
 	sm750_set_current_gate(reg);
 
 	if (sm750_get_chip_type() != SM750LE) {
-		/*	set panel pll and graphic mode via mmio_88 */
-		reg = PEEK32(VGA_CONFIGURATION);
+		/* set panel pll and graphic mode via mmio_88 */
+		reg = peek32(VGA_CONFIGURATION);
 		reg |= (VGA_CONFIGURATION_PLL | VGA_CONFIGURATION_MODE);
-		POKE32(VGA_CONFIGURATION, reg);
+		poke32(VGA_CONFIGURATION, reg);
 	} else {
 #if defined(__i386__) || defined(__x86_64__)
 		/* set graphic mode via IO method */
@@ -244,7 +246,6 @@ int ddk750_init_hw(struct initchip_param *pInitParam)
 	/* Set up master clock */
 	set_master_clock(MHz(pInitParam->masterClock));
 
-
 	/*
 	 * Reset the memory controller.
 	 * If the memory controller is not reset in SM750,
@@ -252,36 +253,36 @@ int ddk750_init_hw(struct initchip_param *pInitParam)
 	 * The memory should be resetted after changing the MXCLK.
 	 */
 	if (pInitParam->resetMemory == 1) {
-		reg = PEEK32(MISC_CTRL);
+		reg = peek32(MISC_CTRL);
 		reg &= ~MISC_CTRL_LOCALMEM_RESET;
-		POKE32(MISC_CTRL, reg);
+		poke32(MISC_CTRL, reg);
 
 		reg |= MISC_CTRL_LOCALMEM_RESET;
-		POKE32(MISC_CTRL, reg);
+		poke32(MISC_CTRL, reg);
 	}
 
 	if (pInitParam->setAllEngOff == 1) {
 		sm750_enable_2d_engine(0);
 
 		/* Disable Overlay, if a former application left it on */
-		reg = PEEK32(VIDEO_DISPLAY_CTRL);
+		reg = peek32(VIDEO_DISPLAY_CTRL);
 		reg &= ~DISPLAY_CTRL_PLANE;
-		POKE32(VIDEO_DISPLAY_CTRL, reg);
+		poke32(VIDEO_DISPLAY_CTRL, reg);
 
 		/* Disable video alpha, if a former application left it on */
-		reg = PEEK32(VIDEO_ALPHA_DISPLAY_CTRL);
+		reg = peek32(VIDEO_ALPHA_DISPLAY_CTRL);
 		reg &= ~DISPLAY_CTRL_PLANE;
-		POKE32(VIDEO_ALPHA_DISPLAY_CTRL, reg);
+		poke32(VIDEO_ALPHA_DISPLAY_CTRL, reg);
 
 		/* Disable alpha plane, if a former application left it on */
-		reg = PEEK32(ALPHA_DISPLAY_CTRL);
+		reg = peek32(ALPHA_DISPLAY_CTRL);
 		reg &= ~DISPLAY_CTRL_PLANE;
-		POKE32(ALPHA_DISPLAY_CTRL, reg);
+		poke32(ALPHA_DISPLAY_CTRL, reg);
 
 		/* Disable DMA Channel, if a former application left it on */
-		reg = PEEK32(DMA_ABORT_INTERRUPT);
+		reg = peek32(DMA_ABORT_INTERRUPT);
 		reg |= DMA_ABORT_INTERRUPT_ABORT_1;
-		POKE32(DMA_ABORT_INTERRUPT, reg);
+		poke32(DMA_ABORT_INTERRUPT, reg);
 
 		/* Disable DMA Power, if a former application left it on */
 		sm750_enable_dma(0);
@@ -309,7 +310,8 @@ int ddk750_init_hw(struct initchip_param *pInitParam)
  * M = {1,...,255}
  * N = {2,...,15}
  */
-unsigned int sm750_calc_pll_value(unsigned int request_orig, struct pll_value *pll)
+unsigned int sm750_calc_pll_value(unsigned int request_orig,
+				  struct pll_value *pll)
 {
 	/*
 	 * as sm750 register definition,
@@ -319,7 +321,7 @@ unsigned int sm750_calc_pll_value(unsigned int request_orig, struct pll_value *p
 	int mini_diff;
 	unsigned int RN, quo, rem, fl_quo;
 	unsigned int input, request;
-	unsigned int tmpClock, ret;
+	unsigned int tmp_clock, ret;
 	const int max_OD = 3;
 	int max_d = 6;
 
@@ -352,7 +354,7 @@ unsigned int sm750_calc_pll_value(unsigned int request_orig, struct pll_value *p
 		RN = N * request;
 		quo = RN / input;
 		rem = RN % input;/* rem always small than 14318181 */
-		fl_quo = (rem * 10000 / input);
+		fl_quo = rem * 10000 / input;
 
 		for (d = max_d; d >= 0; d--) {
 			X = BIT(d);
@@ -363,8 +365,8 @@ unsigned int sm750_calc_pll_value(unsigned int request_orig, struct pll_value *p
 			if (M < 256 && M > 0) {
 				unsigned int diff;
 
-				tmpClock = pll->inputFreq * M / N / X;
-				diff = abs(tmpClock - request_orig);
+				tmp_clock = pll->inputFreq * M / N / X;
+				diff = abs(tmp_clock - request_orig);
 				if (diff < mini_diff) {
 					pll->M = M;
 					pll->N = N;
@@ -373,7 +375,7 @@ unsigned int sm750_calc_pll_value(unsigned int request_orig, struct pll_value *p
 						pll->POD = d - max_OD;
 					pll->OD = d - pll->POD;
 					mini_diff = diff;
-					ret = tmpClock;
+					ret = tmp_clock;
 				}
 			}
 		}
@@ -389,7 +391,6 @@ unsigned int sm750_format_pll_reg(struct pll_value *pPLL)
 	unsigned int OD = pPLL->OD;
 	unsigned int M = pPLL->M;
 	unsigned int N = pPLL->N;
-	unsigned int reg = 0;
 
 	/*
 	 * Note that all PLL's have the same format. Here, we just use
@@ -397,15 +398,11 @@ unsigned int sm750_format_pll_reg(struct pll_value *pPLL)
 	 * register. On returning a 32 bit number, the value can be
 	 * applied to any PLL in the calling function.
 	 */
-	reg = PLL_CTRL_POWER |
+	return PLL_CTRL_POWER |
 #ifndef VALIDATION_CHIP
 		((POD << PLL_CTRL_POD_SHIFT) & PLL_CTRL_POD_MASK) |
 #endif
 		((OD << PLL_CTRL_OD_SHIFT) & PLL_CTRL_OD_MASK) |
 		((N << PLL_CTRL_N_SHIFT) & PLL_CTRL_N_MASK) |
 		((M << PLL_CTRL_M_SHIFT) & PLL_CTRL_M_MASK);
-
-	return reg;
 }
-
-

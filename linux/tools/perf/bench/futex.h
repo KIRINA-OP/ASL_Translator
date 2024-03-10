@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Glibc independent futex library for testing kernel functionality.
  * Shamelessly stolen from Darren Hart <dvhltc@us.ibm.com>
@@ -7,7 +8,6 @@
 #ifndef _FUTEX_H
 #define _FUTEX_H
 
-#include <stdlib.h>
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -86,21 +86,4 @@ futex_cmp_requeue(u_int32_t *uaddr, u_int32_t val, u_int32_t *uaddr2, int nr_wak
 	return futex(uaddr, FUTEX_CMP_REQUEUE, nr_wake, nr_requeue, uaddr2,
 		 val, opflags);
 }
-
-#ifndef HAVE_PTHREAD_ATTR_SETAFFINITY_NP
-#include <pthread.h>
-static inline int pthread_attr_setaffinity_np(pthread_attr_t *attr,
-					      size_t cpusetsize,
-					      cpu_set_t *cpuset)
-{
-	attr = attr;
-	cpusetsize = cpusetsize;
-	cpuset = cpuset;
-	return 0;
-}
-#endif
-
-/* User input sanitation */
-#define futexbench_sanitize_numeric(__n) abs((__n))
-
 #endif /* _FUTEX_H */

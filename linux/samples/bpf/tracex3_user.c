@@ -1,8 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2013-2015 PLUMgrid, http://plumgrid.com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of version 2 of the GNU General Public
- * License as published by the Free Software Foundation.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,12 +8,11 @@
 #include <stdbool.h>
 #include <string.h>
 #include <linux/bpf.h>
+#include <sys/resource.h>
 
-#include "libbpf.h"
+#include <bpf/bpf.h>
 #include "bpf_load.h"
 #include "bpf_util.h"
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*(x)))
 
 #define SLOTS 100
 
@@ -112,10 +108,16 @@ static void print_hist(int fd)
 
 int main(int ac, char **argv)
 {
+	struct rlimit r = {1024*1024, RLIM_INFINITY};
 	char filename[256];
 	int i;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
+
+	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
+		perror("setrlimit(RLIMIT_MEMLOCK)");
+		return 1;
+	}
 
 	if (load_bpf_file(filename)) {
 		printf("%s", bpf_log_buf);

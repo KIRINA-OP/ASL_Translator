@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * cs42l42.h -- CS42L42 ALSA SoC audio driver DT bindings header
  *
@@ -6,11 +7,6 @@
  * Author: James Schulman <james.schulman@cirrus.com>
  * Author: Brian Austin <brian.austin@cirrus.com>
  * Author: Michael White <michael.white@cirrus.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
  */
 
 #ifndef __DT_CS42L42_H
@@ -20,7 +16,7 @@
 #define CS42L42_HPOUT_LOAD_1NF		0
 #define CS42L42_HPOUT_LOAD_10NF		1
 
-/* HPOUT Clamp to GND Overide */
+/* HPOUT Clamp to GND Override */
 #define CS42L42_HPOUT_CLAMP_EN		0
 #define CS42L42_HPOUT_CLAMP_DIS		1
 

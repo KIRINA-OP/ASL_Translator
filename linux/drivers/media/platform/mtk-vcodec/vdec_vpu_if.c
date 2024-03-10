@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2016 MediaTek Inc.
  * Author: PC Chen <pc.chen@mediatek.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include "mtk_vcodec_drv.h"
@@ -70,9 +62,8 @@ void vpu_dec_ipi_handler(void *data, unsigned int len, void *priv)
 static int vcodec_vpu_send_msg(struct vdec_vpu_inst *vpu, void *msg, int len)
 {
 	int err;
-	uint32_t msg_id = *(uint32_t *)msg;
 
-	mtk_vcodec_debug(vpu, "id=%X", msg_id);
+	mtk_vcodec_debug(vpu, "id=%X", *(uint32_t *)msg);
 
 	vpu->failure = 0;
 	vpu->signaled = 0;
@@ -80,7 +71,7 @@ static int vcodec_vpu_send_msg(struct vdec_vpu_inst *vpu, void *msg, int len)
 	err = vpu_ipi_send(vpu->dev, vpu->id, msg, len);
 	if (err) {
 		mtk_vcodec_err(vpu, "send fail vpu_id=%d msg_id=%X status=%d",
-			       vpu->id, msg_id, err);
+			       vpu->id, *(uint32_t *)msg, err);
 		return err;
 	}
 

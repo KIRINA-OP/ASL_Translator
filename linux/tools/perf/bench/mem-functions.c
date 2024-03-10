@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * mem-memcpy.c
  *
@@ -8,10 +9,10 @@
 
 #include "debug.h"
 #include "../perf.h"
-#include "../util/util.h"
 #include <subcmd/parse-options.h>
 #include "../util/header.h"
 #include "../util/cloexec.h"
+#include "../util/string2.h"
 #include "bench.h"
 #include "mem-memcpy-arch.h"
 #include "mem-memset-arch.h"
@@ -22,6 +23,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <linux/time64.h>
+#include <linux/zalloc.h>
 
 #define K 1024
 
@@ -284,7 +286,7 @@ static const char * const bench_mem_memcpy_usage[] = {
 	NULL
 };
 
-int bench_mem_memcpy(int argc, const char **argv, const char *prefix __maybe_unused)
+int bench_mem_memcpy(int argc, const char **argv)
 {
 	struct bench_mem_info info = {
 		.functions		= memcpy_functions,
@@ -358,7 +360,7 @@ static const struct function memset_functions[] = {
 	{ .name = NULL, }
 };
 
-int bench_mem_memset(int argc, const char **argv, const char *prefix __maybe_unused)
+int bench_mem_memset(int argc, const char **argv)
 {
 	struct bench_mem_info info = {
 		.functions		= memset_functions,

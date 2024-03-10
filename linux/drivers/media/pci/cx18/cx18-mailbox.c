@@ -1,23 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  *  cx18 mailbox functions
  *
  *  Copyright (C) 2007  Hans Verkuil <hverkuil@xs4all.nl>
  *  Copyright (C) 2008  Andy Walls <awalls@md.metrocast.net>
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
- *  02111-1307  USA
  */
 
 #include <stdarg.h>
@@ -40,7 +26,7 @@ struct cx18_api_info {
 	u32 cmd;
 	u8 flags;		/* Flags, see above */
 	u8 rpu;			/* Processing unit */
-	const char *name; 	/* The name of the command */
+	const char *name;	/* The name of the command */
 };
 
 #define API_ENTRY(rpu, x, f) { (x), (f), (rpu), #x }
@@ -48,9 +34,9 @@ struct cx18_api_info {
 static const struct cx18_api_info api_info[] = {
 	/* MPEG encoder API */
 	API_ENTRY(CPU, CX18_CPU_SET_CHANNEL_TYPE,		0),
-	API_ENTRY(CPU, CX18_EPU_DEBUG, 				0),
-	API_ENTRY(CPU, CX18_CREATE_TASK, 			0),
-	API_ENTRY(CPU, CX18_DESTROY_TASK, 			0),
+	API_ENTRY(CPU, CX18_EPU_DEBUG,				0),
+	API_ENTRY(CPU, CX18_CREATE_TASK,			0),
+	API_ENTRY(CPU, CX18_DESTROY_TASK,			0),
 	API_ENTRY(CPU, CX18_CPU_CAPTURE_START,                  API_SLOW),
 	API_ENTRY(CPU, CX18_CPU_CAPTURE_STOP,                   API_SLOW),
 	API_ENTRY(CPU, CX18_CPU_CAPTURE_PAUSE,                  0),
@@ -202,7 +188,7 @@ static void cx18_mdl_send_to_videobuf(struct cx18_stream *s,
 	}
 
 	if (dispatch) {
-		v4l2_get_timestamp(&vb_buf->vb.ts);
+		vb_buf->vb.ts = ktime_get_ns();
 		list_del(&vb_buf->vb.queue);
 		vb_buf->vb.state = VIDEOBUF_DONE;
 		wake_up(&vb_buf->vb.done);

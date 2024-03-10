@@ -1,14 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *  ezx.c - Common code for the EZX platform.
  *
  *  Copyright (C) 2005-2006 Harald Welte <laforge@openezx.org>,
  *		  2007-2008 Daniel Ribeiro <drwyrm@gmail.com>,
  *		  2007-2008 Stefan Schmidt <stefan@datenfreihafen.org>
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
- *
  */
 
 #include <linux/kernel.h>
@@ -21,9 +17,10 @@
 #include <linux/regulator/fixed.h>
 #include <linux/input.h>
 #include <linux/gpio.h>
+#include <linux/gpio/machine.h>
 #include <linux/gpio_keys.h>
 #include <linux/leds-lp3944.h>
-#include <linux/i2c/pxa-i2c.h>
+#include <linux/platform_data/i2c-pxa.h>
 
 #include <asm/setup.h>
 #include <asm/mach-types.h>
@@ -696,6 +693,44 @@ static struct pxa27x_keypad_platform_data e2_keypad_platform_data = {
 };
 #endif /* CONFIG_MACH_EZX_E2 */
 
+#if defined(CONFIG_MACH_EZX_A780) || defined(CONFIG_MACH_EZX_A910)
+/* camera */
+static struct regulator_consumer_supply camera_regulator_supplies[] = {
+	REGULATOR_SUPPLY("vdd", "0-005d"),
+};
+
+static struct regulator_init_data camera_regulator_initdata = {
+	.consumer_supplies = camera_regulator_supplies,
+	.num_consumer_supplies = ARRAY_SIZE(camera_regulator_supplies),
+	.constraints = {
+		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
+	},
+};
+
+static struct fixed_voltage_config camera_regulator_config = {
+	.supply_name		= "camera_vdd",
+	.microvolts		= 2800000,
+	.init_data		= &camera_regulator_initdata,
+};
+
+static struct platform_device camera_supply_regulator_device = {
+	.name	= "reg-fixed-voltage",
+	.id	= 1,
+	.dev	= {
+		.platform_data = &camera_regulator_config,
+	},
+};
+
+static struct gpiod_lookup_table camera_supply_gpiod_table = {
+	.dev_id = "reg-fixed-voltage.1",
+	.table = {
+		GPIO_LOOKUP("gpio-pxa", GPIO50_nCAM_EN,
+			    NULL, GPIO_ACTIVE_LOW),
+		{ },
+	},
+};
+#endif
+
 #ifdef CONFIG_MACH_EZX_A780
 /* gpio_keys */
 static struct gpio_keys_button a780_buttons[] = {
@@ -723,33 +758,6 @@ static struct platform_device a780_gpio_keys = {
 };
 
 /* camera */
-static struct regulator_consumer_supply camera_dummy_supplies[] = {
-	REGULATOR_SUPPLY("vdd", "0-005d"),
-};
-
-static struct regulator_init_data camera_dummy_initdata = {
-	.consumer_supplies = camera_dummy_supplies,
-	.num_consumer_supplies = ARRAY_SIZE(camera_dummy_supplies),
-	.constraints = {
-		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
-	},
-};
-
-static struct fixed_voltage_config camera_dummy_config = {
-	.supply_name		= "camera_vdd",
-	.microvolts		= 2800000,
-	.gpio			= GPIO50_nCAM_EN,
-	.enable_high		= 0,
-	.init_data		= &camera_dummy_initdata,
-};
-
-static struct platform_device camera_supply_dummy_device = {
-	.name	= "reg-fixed-voltage",
-	.id	= 1,
-	.dev	= {
-		.platform_data = &camera_dummy_config,
-	},
-};
 static int a780_camera_reset(struct device *dev)
 {
 	gpio_set_value(GPIO19_GEN1_CAM_RST, 0);
@@ -796,7 +804,7 @@ static struct i2c_board_info a780_i2c_board_info[] = {
 
 static struct platform_device *a780_devices[] __initdata = {
 	&a780_gpio_keys,
-	&camera_supply_dummy_device,
+	&camera_supply_regulator_device,
 };
 
 static void __init a780_init(void)
@@ -819,6 +827,7 @@ static void __init a780_init(void)
 	if (a780_camera_init() == 0)
 		pxa_set_camera_info(&a780_pxacamera_platform_data);
 
+	gpiod_add_lookup_table(&camera_supply_gpiod_table);
 	pwm_add_table(ezx_pwm_lookup, ARRAY_SIZE(ezx_pwm_lookup));
 	platform_add_devices(ARRAY_AND_SIZE(ezx_devices));
 	platform_add_devices(ARRAY_AND_SIZE(a780_devices));
@@ -1094,7 +1103,7 @@ static struct i2c_board_info __initdata a910_i2c_board_info[] = {
 
 static struct platform_device *a910_devices[] __initdata = {
 	&a910_gpio_keys,
-	&camera_supply_dummy_device,
+	&camera_supply_regulator_device,
 };
 
 static void __init a910_init(void)
@@ -1117,6 +1126,7 @@ static void __init a910_init(void)
 	if (a910_camera_init() == 0)
 		pxa_set_camera_info(&a910_pxacamera_platform_data);
 
+	gpiod_add_lookup_table(&camera_supply_gpiod_table);
 	pwm_add_table(ezx_pwm_lookup, ARRAY_SIZE(ezx_pwm_lookup));
 	platform_add_devices(ARRAY_AND_SIZE(ezx_devices));
 	platform_add_devices(ARRAY_AND_SIZE(a910_devices));

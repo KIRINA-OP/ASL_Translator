@@ -59,7 +59,7 @@ static int sa1100dog_open(struct inode *inode, struct file *file)
 	writel_relaxed(OSSR_M3, OSSR);
 	writel_relaxed(OWER_WME, OWER);
 	writel_relaxed(readl_relaxed(OIER) | OIER_E3, OIER);
-	return nonseekable_open(inode, file);
+	return stream_open(inode, file);
 }
 
 /*
@@ -188,12 +188,14 @@ static int __init sa1100dog_init(void)
 	pre_margin = oscr_freq * margin;
 
 	ret = misc_register(&sa1100dog_miscdev);
-	if (ret == 0)
+	if (ret == 0) {
 		pr_info("SA1100/PXA2xx Watchdog Timer: timer margin %d sec\n",
 			margin);
-	return ret;
-err:
+		return 0;
+	}
+
 	clk_disable_unprepare(clk);
+err:
 	clk_put(clk);
 	return ret;
 }

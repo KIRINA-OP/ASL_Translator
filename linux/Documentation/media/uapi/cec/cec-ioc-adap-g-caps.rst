@@ -1,4 +1,11 @@
-.. -*- coding: utf-8; mode: rst -*-
+.. Permission is granted to copy, distribute and/or modify this
+.. document under the terms of the GNU Free Documentation License,
+.. Version 1.1 or any later version published by the Free Software
+.. Foundation, with no Invariant Sections, no Front-Cover Texts
+.. and no Back-Cover Texts. A copy of the license is included at
+.. Documentation/media/uapi/fdl-appendix.rst.
+..
+.. TODO: replace it to GFDL-1.1-or-later WITH no-invariant-sections
 
 .. _CEC_ADAP_G_CAPS:
 
@@ -21,7 +28,7 @@ Arguments
 =========
 
 ``fd``
-    File descriptor returned by :ref:`open() <cec-func-open>`.
+    File descriptor returned by :c:func:`open() <cec-open>`.
 
 ``argp``
 
@@ -113,6 +120,21 @@ returns the information to the application. The ioctl never fails.
       - 0x00000020
       - The CEC hardware can monitor all messages, not just directed and
 	broadcast messages.
+    * .. _`CEC-CAP-NEEDS-HPD`:
+
+      - ``CEC_CAP_NEEDS_HPD``
+      - 0x00000040
+      - The CEC hardware is only active if the HDMI Hotplug Detect pin is
+        high. This makes it impossible to use CEC to wake up displays that
+	set the HPD pin low when in standby mode, but keep the CEC bus
+	alive.
+    * .. _`CEC-CAP-MONITOR-PIN`:
+
+      - ``CEC_CAP_MONITOR_PIN``
+      - 0x00000080
+      - The CEC hardware can monitor CEC pin changes from low to high voltage
+        and vice versa. When in pin monitoring mode the application will
+	receive ``CEC_EVENT_PIN_CEC_LOW`` and ``CEC_EVENT_PIN_CEC_HIGH`` events.
 
 
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* CAN driver for Geschwister Schneider USB/CAN devices
  * and bytewerk.org candleLight USB CAN interfaces.
  *
@@ -6,15 +7,6 @@
  * Copyright (C) 2016 Hubert Denkmair
  *
  * Many thanks to all socketcan devs!
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published
- * by the Free Software Foundation; version 2 of the License.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
  */
 
 #include <linux/init.h>
@@ -243,7 +235,7 @@ static struct gs_tx_context *gs_get_tx_context(struct gs_can *dev,
 	return NULL;
 }
 
-static int gs_cmd_reset(struct gs_usb *gsusb, struct gs_can *gsdev)
+static int gs_cmd_reset(struct gs_can *gsdev)
 {
 	struct gs_device_mode *dm;
 	struct usb_interface *intf = gsdev->iface;
@@ -258,12 +250,14 @@ static int gs_cmd_reset(struct gs_usb *gsusb, struct gs_can *gsdev)
 	rc = usb_control_msg(interface_to_usbdev(intf),
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_MODE,
-			     USB_DIR_OUT|USB_TYPE_VENDOR|USB_RECIP_INTERFACE,
+			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
 			     gsdev->channel,
 			     0,
 			     dm,
 			     sizeof(*dm),
 			     1000);
+
+	kfree(dm);
 
 	return rc;
 }
@@ -373,6 +367,8 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 
 		gs_free_tx_context(txc);
 
+		atomic_dec(&dev->active_tx_urbs);
+
 		netif_wake_queue(netdev);
 	}
 
@@ -432,7 +428,7 @@ static int gs_usb_set_bittiming(struct net_device *netdev)
 	rc = usb_control_msg(interface_to_usbdev(intf),
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_BITTIMING,
-			     USB_DIR_OUT|USB_TYPE_VENDOR|USB_RECIP_INTERFACE,
+			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
 			     dev->channel,
 			     0,
 			     dbt,
@@ -445,7 +441,7 @@ static int gs_usb_set_bittiming(struct net_device *netdev)
 		dev_err(netdev->dev.parent, "Couldn't set bittimings (err=%d)",
 			rc);
 
-	return rc;
+	return (rc > 0) ? 0 : rc;
 }
 
 static void gs_usb_xmit_callback(struct urb *urb)
@@ -461,14 +457,6 @@ static void gs_usb_xmit_callback(struct urb *urb)
 			  urb->transfer_buffer_length,
 			  urb->transfer_buffer,
 			  urb->transfer_dma);
-
-	atomic_dec(&dev->active_tx_urbs);
-
-	if (!netif_device_present(netdev))
-		return;
-
-	if (netif_queue_stopped(netdev))
-		netif_wake_queue(netdev);
 }
 
 static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
@@ -545,7 +533,6 @@ static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
 				  sizeof(*hf),
 				  hf,
 				  urb->transfer_dma);
-
 
 		if (rc == -ENODEV) {
 			netif_device_detach(netdev);
@@ -714,7 +701,7 @@ static int gs_can_close(struct net_device *netdev)
 	atomic_set(&dev->active_tx_urbs, 0);
 
 	/* reset the device */
-	rc = gs_cmd_reset(parent, dev);
+	rc = gs_cmd_reset(dev);
 	if (rc < 0)
 		netdev_warn(netdev, "Couldn't shutdown device (err=%d)", rc);
 
@@ -811,7 +798,7 @@ static struct gs_can *gs_make_candev(unsigned int channel,
 	rc = usb_control_msg(interface_to_usbdev(intf),
 			     usb_rcvctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_BT_CONST,
-			     USB_DIR_IN|USB_TYPE_VENDOR|USB_RECIP_INTERFACE,
+			     USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
 			     channel,
 			     0,
 			     bt_const,
@@ -928,7 +915,7 @@ static int gs_usb_probe(struct usb_interface *intf,
 	rc = usb_control_msg(interface_to_usbdev(intf),
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_HOST_FORMAT,
-			     USB_DIR_OUT|USB_TYPE_VENDOR|USB_RECIP_INTERFACE,
+			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
 			     1,
 			     intf->altsetting[0].desc.bInterfaceNumber,
 			     hconf,
@@ -951,7 +938,7 @@ static int gs_usb_probe(struct usb_interface *intf,
 	rc = usb_control_msg(interface_to_usbdev(intf),
 			     usb_rcvctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_DEVICE_CONFIG,
-			     USB_DIR_IN|USB_TYPE_VENDOR|USB_RECIP_INTERFACE,
+			     USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
 			     1,
 			     intf->altsetting[0].desc.bInterfaceNumber,
 			     dconf,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * rrunner.c: Linux driver for the Essential RoadRunner HIPPI board.
  *
@@ -8,11 +9,6 @@
  * been able to write this driver. A special thank you to John Gibbon
  * for sorting out the legal issues, with the NDA, allowing the code to
  * be released under the GPL.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
  *
  * Thanks to Jayaram Bhat from ODS/Essential for fixing some of the
  * stupid bugs in my code.
@@ -60,7 +56,8 @@ MODULE_AUTHOR("Jes Sorensen <jes@wildopensource.com>");
 MODULE_DESCRIPTION("Essential RoadRunner HIPPI driver");
 MODULE_LICENSE("GPL");
 
-static char version[] = "rrunner.c: v0.50 11/11/2002  Jes Sorensen (jes@wildopensource.com)\n";
+static const char version[] =
+"rrunner.c: v0.50 11/11/2002  Jes Sorensen (jes@wildopensource.com)\n";
 
 
 static const struct net_device_ops rr_netdev_ops = {
@@ -866,7 +863,7 @@ static u32 rr_handle_event(struct net_device *dev, u32 prodidx, u32 eidx)
 			       dev->name);
 			goto drop;
 		case E_FRM_ERR:
-			printk(KERN_WARNING "%s: Framming Error\n",
+			printk(KERN_WARNING "%s: Framing Error\n",
 			       dev->name);
 			goto drop;
 		case E_FLG_SYN_ERR:
@@ -961,8 +958,8 @@ static void rx_int(struct net_device *dev, u32 rxlimit, u32 index)
 								    pkt_len,
 								    PCI_DMA_FROMDEVICE);
 
-					memcpy(skb_put(skb, pkt_len),
-					       rx_skb->data, pkt_len);
+					skb_put_data(skb, rx_skb->data,
+						     pkt_len);
 
 					pci_dma_sync_single_for_device(rrpriv->pci_dev,
 								       desc->addr.addrlo,
@@ -1145,10 +1142,10 @@ static inline void rr_raz_rx(struct rr_private *rrpriv,
 	}
 }
 
-static void rr_timer(unsigned long data)
+static void rr_timer(struct timer_list *t)
 {
-	struct net_device *dev = (struct net_device *)data;
-	struct rr_private *rrpriv = netdev_priv(dev);
+	struct rr_private *rrpriv = from_timer(rrpriv, t, timer);
+	struct net_device *dev = pci_get_drvdata(rrpriv->pci_dev);
 	struct rr_regs __iomem *regs = rrpriv->regs;
 	unsigned long flags;
 
@@ -1228,10 +1225,8 @@ static int rr_open(struct net_device *dev)
 
 	/* Set the timer to switch to check for link beat and perhaps switch
 	   to an alternate media type. */
-	init_timer(&rrpriv->timer);
+	timer_setup(&rrpriv->timer, rr_timer, 0);
 	rrpriv->timer.expires = RUN_AT(5*HZ);           /* 5 sec. watchdog */
-	rrpriv->timer.data = (unsigned long)dev;
-	rrpriv->timer.function = rr_timer;               /* timer handler */
 	add_timer(&rrpriv->timer);
 
 	netif_start_queue(dev);
@@ -1299,11 +1294,11 @@ static void rr_dump(struct net_device *dev)
 	if (rrpriv->tx_skbuff[cons]){
 		len = min_t(int, 0x80, rrpriv->tx_skbuff[cons]->len);
 		printk("skbuff for cons %i is valid - dumping data (0x%x bytes - skbuff len 0x%x)\n", cons, len, rrpriv->tx_skbuff[cons]->len);
-		printk("mode 0x%x, size 0x%x,\n phys %08Lx, skbuff-addr %08lx, truesize 0x%x\n",
+		printk("mode 0x%x, size 0x%x,\n phys %08Lx, skbuff-addr %p, truesize 0x%x\n",
 		       rrpriv->tx_ring[cons].mode,
 		       rrpriv->tx_ring[cons].size,
 		       (unsigned long long) rrpriv->tx_ring[cons].addr.addrlo,
-		       (unsigned long)rrpriv->tx_skbuff[cons]->data,
+		       rrpriv->tx_skbuff[cons]->data,
 		       (unsigned int)rrpriv->tx_skbuff[cons]->truesize);
 		for (i = 0; i < len; i++){
 			if (!(i & 7))
@@ -1380,8 +1375,8 @@ static int rr_close(struct net_device *dev)
 			    rrpriv->info_dma);
 	rrpriv->info = NULL;
 
-	free_irq(pdev->irq, dev);
 	spin_unlock_irqrestore(&rrpriv->lock, flags);
+	free_irq(pdev->irq, dev);
 
 	return 0;
 }
@@ -1421,7 +1416,7 @@ static netdev_tx_t rr_start_xmit(struct sk_buff *skb,
 		skb = new_skb;
 	}
 
-	ifield = (u32 *)skb_push(skb, 8);
+	ifield = skb_push(skb, 8);
 
 	ifield[0] = 0;
 	ifield[1] = hcb->ifield;
@@ -1584,7 +1579,7 @@ static int rr_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 			return -EPERM;
 		}
 
-		image = kmalloc(EEPROM_WORDS * sizeof(u32), GFP_KERNEL);
+		image = kmalloc_array(EEPROM_WORDS, sizeof(u32), GFP_KERNEL);
 		if (!image)
 			return -ENOMEM;
 
@@ -1615,17 +1610,14 @@ static int rr_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 			return -EPERM;
 		}
 
-		image = kmalloc(EEPROM_WORDS * sizeof(u32), GFP_KERNEL);
-		oldimage = kmalloc(EEPROM_WORDS * sizeof(u32), GFP_KERNEL);
-		if (!image || !oldimage) {
-			error = -ENOMEM;
-			goto wf_out;
-		}
+		image = memdup_user(rq->ifr_data, EEPROM_BYTES);
+		if (IS_ERR(image))
+			return PTR_ERR(image);
 
-		error = copy_from_user(image, rq->ifr_data, EEPROM_BYTES);
-		if (error) {
-			error = -EFAULT;
-			goto wf_out;
+		oldimage = kmalloc(EEPROM_BYTES, GFP_KERNEL);
+		if (!oldimage) {
+			kfree(image);
+			return -ENOMEM;
 		}
 
 		if (rrpriv->fw_running){

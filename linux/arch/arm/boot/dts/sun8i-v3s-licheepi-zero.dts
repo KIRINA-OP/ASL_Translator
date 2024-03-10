@@ -55,11 +55,33 @@
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		blue_led {
+			label = "licheepi:blue:usr";
+			gpios = <&pio 6 1 GPIO_ACTIVE_LOW>; /* PG1 */
+		};
+
+		green_led {
+			label = "licheepi:green:usr";
+			gpios = <&pio 6 0 GPIO_ACTIVE_LOW>; /* PG0 */
+			default-state = "on";
+		};
+
+		red_led {
+			label = "licheepi:red:usr";
+			gpios = <&pio 6 2 GPIO_ACTIVE_LOW>; /* PG2 */
+		};
+	};
+};
+
+&ehci0 {
+	status = "okay";
 };
 
 &mmc0 {
-	pinctrl-0 = <&mmc0_pins_a>;
-	pinctrl-names = "default";
 	broken-cd;
 	bus-width = <4>;
 	vmmc-supply = <&reg_vcc3v3>;
@@ -73,19 +95,14 @@
 		compatible = "nsiway,ns2009";
 		reg = <0x48>;
 	};
-	ssd1306fb: ssd1306fb@3c {
-		compatible = "solomon, ssd1306fb-i2c";
-		reg = <0x3c>;
-		solomon, width = <128>
-		solomon, height = <64>;
-		reset-gpios = <&pio 1 0 GPIO_ACTIVE_HIGH>;
-		solomon,page-offset = <0>;
-		solomon, com-invdir;
-	};
+};
+
+&ohci0 {
+	status = "okay";
 };
 
 &uart0 {
-	pinctrl-0 = <&uart0_pins_a>;
+	pinctrl-0 = <&uart0_pb_pins>;
 	pinctrl-names = "default";
 	status = "okay";
 };
@@ -96,6 +113,6 @@
 };
 
 &usbphy {
-	usb0_id_det-gpio = <&pio 5 6 GPIO_ACTIVE_HIGH>;
+	usb0_id_det-gpios = <&pio 5 6 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 };

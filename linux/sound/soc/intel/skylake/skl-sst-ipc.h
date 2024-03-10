@@ -1,16 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Intel SKL IPC Support
  *
  * Copyright (C) 2014-15, Intel Corporation.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as version 2, as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
  */
 
 #ifndef __SKL_IPC_H
@@ -44,12 +36,10 @@ struct skl_ipc_header {
 	u32 extension;
 };
 
-#define SKL_DSP_CORES_MAX  2
-
 struct skl_dsp_cores {
 	unsigned int count;
-	enum skl_dsp_states state[SKL_DSP_CORES_MAX];
-	int usage_count[SKL_DSP_CORES_MAX];
+	enum skl_dsp_states *state;
+	int *usage_count;
 };
 
 /**
@@ -69,6 +59,14 @@ struct skl_d0i3_data {
 	struct delayed_work work;
 };
 
+#define SKL_LIB_NAME_LENGTH 128
+#define SKL_MAX_LIB 16
+
+struct skl_lib_info {
+	char name[SKL_LIB_NAME_LENGTH];
+	const struct firmware *fw;
+};
+
 struct skl_sst {
 	struct device *dev;
 	struct sst_dsp *dsp;
@@ -76,6 +74,11 @@ struct skl_sst {
 	/* boot */
 	wait_queue_head_t boot_wait;
 	bool boot_complete;
+
+	/* module load */
+	wait_queue_head_t mod_load_wait;
+	bool mod_load_complete;
+	bool mod_load_status;
 
 	/* IPC messaging */
 	struct sst_generic_ipc ipc;
@@ -97,13 +100,19 @@ struct skl_sst {
 	/* multi-core */
 	struct skl_dsp_cores cores;
 
-	/* tplg manifest */
-	struct skl_dfw_manifest manifest;
+	/* library info */
+	struct skl_lib_info  lib_info[SKL_MAX_LIB];
+	int lib_count;
 
 	/* Callback to update D0i3C register */
 	void (*update_d0i3c)(struct device *dev, bool enable);
 
 	struct skl_d0i3_data d0i3;
+
+	const struct skl_dsp_ops *dsp_ops;
+
+	/* Callback to update dynamic clock and power gating registers */
+	void (*clock_power_gating)(struct device *dev, bool enable);
 };
 
 struct skl_ipc_init_instance_msg {
@@ -181,7 +190,7 @@ int skl_ipc_get_large_config(struct sst_generic_ipc *ipc,
 		struct skl_ipc_large_config_msg *msg, u32 *param);
 
 int skl_sst_ipc_load_library(struct sst_generic_ipc *ipc,
-			u8 dma_id, u8 table_id);
+			u8 dma_id, u8 table_id, bool wait);
 
 int skl_ipc_set_d0ix(struct sst_generic_ipc *ipc,
 		struct skl_ipc_d0ix_msg *msg);
@@ -198,4 +207,10 @@ void skl_ipc_free(struct sst_generic_ipc *ipc);
 int skl_ipc_init(struct device *dev, struct skl_sst *skl);
 void skl_clear_module_cnt(struct sst_dsp *ctx);
 
+void skl_ipc_process_reply(struct sst_generic_ipc *ipc,
+		struct skl_ipc_header header);
+int skl_ipc_process_notification(struct sst_generic_ipc *ipc,
+		struct skl_ipc_header header);
+void skl_ipc_tx_data_copy(struct ipc_message *msg, char *tx_data,
+		size_t tx_size);
 #endif /* __SKL_IPC_H */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /******************************************************************************
  * platform-pci.c
  *
@@ -8,20 +9,6 @@
  * Copyright (c) 2005, Intel Corporation.
  * Copyright (c) 2007, XenSource Inc.
  * Copyright (c) 2010, Citrix
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
- * Place - Suite 330, Boston, MA 02111-1307 USA.
- *
  */
 
 
@@ -90,8 +77,10 @@ static int xen_allocate_irq(struct pci_dev *pdev)
 static int platform_pci_resume(struct pci_dev *pdev)
 {
 	int err;
-	if (!xen_pv_domain())
+
+	if (xen_have_vector_callback)
 		return 0;
+
 	err = xen_set_callback_via(callback_via);
 	if (err) {
 		dev_err(&pdev->dev, "platform_pci_resume failure!\n");
@@ -137,15 +126,7 @@ static int platform_pci_probe(struct pci_dev *pdev,
 
 	platform_mmio = mmio_addr;
 	platform_mmiolen = mmio_len;
-
-	/* 
-	 * Xen HVM guests always use the vector callback mechanism.
-	 * L1 Dom0 in a nested Xen environment is a PV guest inside in an
-	 * HVM environment. It needs the platform-pci driver to get
-	 * notifications from L0 Xen, but it cannot use the vector callback
-	 * as it is not exported by L1 Xen.
-	 */
-	if (xen_pv_domain()) {
+	if (!xen_have_vector_callback) {
 		ret = xen_allocate_irq(pdev);
 		if (ret) {
 			dev_warn(&pdev->dev, "request_irq failed err=%d\n", ret);
@@ -181,7 +162,7 @@ pci_out:
 	return ret;
 }
 
-static struct pci_device_id platform_pci_tbl[] = {
+static const struct pci_device_id platform_pci_tbl[] = {
 	{PCI_VENDOR_ID_XEN, PCI_DEVICE_ID_XEN_PLATFORM,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
 	{0,}
