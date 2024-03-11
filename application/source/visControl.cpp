@@ -6,7 +6,6 @@
 //first try: using libgpiod.h in C
 
 visGpioControl::visGpioControl(){
-
 }
 
 bool visGpioControl::init(){
@@ -23,24 +22,32 @@ bool visGpioControl::configPin(UWORD pin, bool write){
     if(write){
         if(pin_write.find(pin) != pin_write.end())
             return true;
-        if(pin_read.find(pin) != pin_read.end())
+        if(pin_read.find(pin) != pin_read.end()){
+            gpiod_line* prev_line = pin_read[pin];
+            gpiod_line_release(prev_line);
             pin_read.erase(pin);
+        }
         gpiod_line* target_pin = gpiod_chip_get_line(chip, pin);
         gpiod_line_request_output(target_pin, ("w" + std::to_string(n)).c_str(), 0);
-        if(!target_pin)
+        if(!target_pin){
+
             return false;
+        }
         pin_write[pin] = target_pin;
     }
     else{
-        if(pin_write.find(pin) != pin_write.end())
-            return true;
         if(pin_read.find(pin) != pin_read.end())
-            pin_read.erase(pin);
+            return true;
+        if(pin_write.find(pin) != pin_write.end()){
+            gpiod_line* prev_line = pin_write[pin];
+            gpiod_line_release(prev_line);
+            pin_write.erase(pin);
+        }
         gpiod_line* target_pin = gpiod_chip_get_line(chip, pin);
-        gpiod_line_request_output(target_pin, ("w" + std::to_string(n)).c_str(), 0);
+        gpiod_line_request_input(target_pin, ("r" + std::to_string(n)).c_str());
         if(!target_pin)
             return false;
-        pin_write[pin] = target_pin;
+        pin_read[pin] = target_pin;
     }
     return true;
 }
@@ -51,17 +58,20 @@ UBYTE visGpioControl::readPin(UWORD pin){
     gpiod_line* target_pin = pin_read[pin];
     int ret = gpiod_line_get_value(target_pin);
     if(ret == -1)
-        throw std::runtime_error("invalid read operation");
+        printf("invalid read operation");
     return (UBYTE)ret;
 }
 
-void visGpioControl::writePin(UWORD pin, UBYTE val){
+bool visGpioControl::writePin(UWORD pin, UBYTE val){
     if(pin_write.find(pin) == pin_write.end())
-        configPin(pin, false);
+        configPin(pin, true);
     gpiod_line* target_pin = pin_write[pin];
     int ret = gpiod_line_set_value(target_pin, val);
-    if(ret == -1)
-        throw std::runtime_error("invalid read operation");
+    if(ret == -1){
+        printf("invalid write operation");
+        return false;
+    }
+    return true;
 }
 
 
@@ -71,7 +81,7 @@ visGpioControl::~visGpioControl(){
 
 
 visScreenControl::visScreenControl(visGpioControl * gpio){
-    
+
 }
 
 void visScreenControl::oled_reset(){
