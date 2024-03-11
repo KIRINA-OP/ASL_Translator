@@ -12,12 +12,13 @@
 #include <iostream>
 #include "visIpcMsg.h"
 #include "visThreads.h"
+#include <jpeglib.h>
 
 int main(int argc, char **argv){
     visSocketAlgo algo_socket(APP_SOCKET_PATH, ALGO_SOCKET_PATH);
     algo_socket.init();
-    uint8_t* receive_buf = new uint8_t[BUF_LENGTH_FRAME];
-    uint8_t* deliver_buf = new uint8_t[MAXLINE];
+    JSAMPLE* receive_buf = new uint8_t[BUF_LENGTH_FRAME];
+    JSAMPLE* deliver_buf = new uint8_t[MAXLINE];
     while(1){
         int n = algo_socket.receive(receive_buf, BUF_LENGTH_FRAME);
         if(n == 1)
@@ -26,7 +27,7 @@ int main(int argc, char **argv){
             break;
         }
         else if (n == 0){
-            deliver_buf[0] = 0x20;
+            getFrameBuf(deliver_buf, BUF_LENGTH_FRAME);
             algo_socket.deliver(deliver_buf, MAXLINE);
         }
     }

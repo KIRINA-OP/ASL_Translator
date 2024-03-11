@@ -1,6 +1,10 @@
 #include "visIpcMsg.h"
 #include <cstdint>
 
+//New Libs
+#include <cstring>
+#include <jpeglib.h>
+
 visSocketApp:: visSocketApp(std::string app_path, std::string algo_path){
     app_sock_path = app_path;
     algo_sock_path = algo_path;
@@ -32,13 +36,13 @@ int visSocketApp::init(){
 }
 
 
-int visSocketApp:: deliver(uint8_t * content, int len){
+int visSocketApp:: deliver(JSAMPLE * content, int len){
     write(app_sock, content, len);
     return 0;
 }
 
 
-int visSocketApp:: receive(uint8_t * buf, size_t len){
+int visSocketApp:: receive(JSAMPLE * buf, size_t len){
     int ret = read(app_sock, buf, len);
     if(ret < 0){
         perror("receive content error\n");
