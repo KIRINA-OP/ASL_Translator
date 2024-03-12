@@ -1,6 +1,11 @@
 #include "visIpcMsg.h"
 #include <cstdint>
 
+//new
+#include <fstream>
+#include <iostream>
+#include <ostream>
+
 visSocketApp:: visSocketApp(std::string app_path, std::string algo_path){
     app_sock_path = app_path;
     algo_sock_path = algo_path;
@@ -32,18 +37,79 @@ int visSocketApp::init(){
 }
 
 
-int visSocketApp:: deliver(uint8_t * content, int len){
-    write(app_sock, content, len);
+int visSocketApp:: deliver(const std::string& filename){
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        perror("Error opening file for reading");
+        return -1;
+    }
+
+    // Determine the size of the file
+    file.seekg(0, std::ios::end);
+    size_t fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    // Send the file size over the socket
+    if (write(app_sock, &fileSize, sizeof(fileSize)) != sizeof(fileSize)) {
+        perror("Error writing file size to socket");
+        return -1;
+    }
+
+    // Allocate memory for the file content
+    uint8_t *content = new uint8_t[fileSize];
+
+    // Read the file content into memory
+    file.read(reinterpret_cast<char*>(content), fileSize);
+
+    // Send the file content over the socket
+    ssize_t bytesSent = write(app_sock, content, fileSize);
+    if (bytesSent != fileSize) {
+        perror("Error writing file content to socket");
+        delete[] content; // Clean up memory
+        return -1;
+    } else {
+        std::cout << "Sent " << bytesSent << " bytes over the socket" << std::endl;
+    }
+
+    // Clean up
+    delete[] content;
     return 0;
 }
 
 
-int visSocketApp:: receive(uint8_t * buf, size_t len){
-    int ret = read(app_sock, buf, len);
-    if(ret < 0){
-        perror("receive content error\n");
+int visSocketApp::receive(const std::string& filename) {
+    const int BUFFER_SIZE = 1024; // Define your buffer size as needed
+    char buffer[BUFFER_SIZE];
+
+    // Open file for writing the received data
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        perror("Error opening file for writing");
         return -1;
     }
+
+    // Receive the file size
+    size_t fileSize;
+    read(app_sock, &fileSize, sizeof(fileSize));
+
+    // Receive data from the socket until the entire file is received
+    size_t totalReceived = 0;
+    ssize_t bytesRead;
+    while (totalReceived < fileSize && (bytesRead = read(app_sock, buffer, BUFFER_SIZE)) > 0) {
+        // Write the received data to the file
+        file.write(buffer, bytesRead);
+        totalReceived += bytesRead;
+    }
+
+    // Check for any errors or if the file size doesn't match what was received
+    if (bytesRead < 0 || totalReceived != fileSize) {
+        perror("Error receiving data from socket");
+        return -1;
+    }
+
+    // Close the file
+    file.close();
+
     return 0;
 }
 
@@ -88,22 +154,81 @@ int visSocketAlgo:: init(){
     printf("accept app socket successfully \n");
     return 0;
 }
-int visSocketAlgo:: deliver(uint8_t * content, int len){
-    write(app_sock, content, len);
+
+int visSocketAlgo:: deliver(const std::string& filename){
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        perror("Error opening file for reading");
+        return -1;
+    }
+
+    // Determine the size of the file
+    file.seekg(0, std::ios::end);
+    size_t fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    // Send the file size over the socket
+    if (write(app_sock, &fileSize, sizeof(fileSize)) != sizeof(fileSize)) {
+        perror("Error writing file size to socket");
+        return -1;
+    }
+
+    // Allocate memory for the file content
+    uint8_t *content = new uint8_t[fileSize];
+
+    // Read the file content into memory
+    file.read(reinterpret_cast<char*>(content), fileSize);
+
+    // Send the file content over the socket
+    ssize_t bytesSent = write(app_sock, content, fileSize);
+    if (bytesSent != fileSize) {
+        perror("Error writing file content to socket");
+        delete[] content; // Clean up memory
+        return -1;
+    } else {
+        std::cout << "Sent " << bytesSent << " bytes over the socket" << std::endl;
+    }
+
+    // Clean up
+    delete[] content;
     return 0;
 }
 
 
-int visSocketAlgo:: receive(uint8_t * buf, size_t len){
-    int ret = read(app_sock, buf, len);
-    if(ret < 0){
-        perror("receive content error\n");
+int visSocketAlgo::receive(const std::string& filename) {
+    const int BUFFER_SIZE = 1024; // Define your buffer size as needed
+    char buffer[BUFFER_SIZE];
+
+    // Open file for writing the received data
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        perror("Error opening file for writing");
         return -1;
     }
-    if(ret == 0){
-        printf("EOF\n");
-        return 1;
+
+    // Receive the file size
+    size_t fileSize;
+    read(app_sock, &fileSize, sizeof(fileSize));
+    std::cout << fileSize << std::endl;
+
+    // Receive data from the socket until the entire file is received
+    size_t totalReceived = 0;
+    ssize_t bytesRead;
+    while (totalReceived < fileSize && (bytesRead = read(app_sock, buffer, BUFFER_SIZE)) > 0) {
+        // Write the received data to the file
+        file.write(buffer, bytesRead);
+        totalReceived += bytesRead;
     }
+
+    // Check for any errors or if the file size doesn't match what was received
+    if (bytesRead < 0 || totalReceived != fileSize) {
+        perror("Error receiving data from socket");
+        return -1;
+    }
+
+    // Close the file
+    file.close();
+
     return 0;
 }
 

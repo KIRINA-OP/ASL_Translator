@@ -17,21 +17,44 @@ void print_buf(uint8_t * buf, int len){
     printf("end \n");
 }
 
+// void frameTransfer(){
+//     visSocketApp app_socket = visSocketApp(APP_SOCKET_PATH, ALGO_SOCKET_PATH);
+//     app_socket.init();
+//     uint8_t * deliver_buf = new uint8_t[BUF_LENGTH_FRAME];
+//     //start two threads one for sending and one for receiving
+//     getFrameBuf(deliver_buf, BUF_LENGTH_FRAME);
+//     app_socket.deliver(deliver_buf, BUF_LENGTH_FRAME);
+//     sleep(1);
+//     uint8_t * receive_buf = new uint8_t[MAXLINE];
+//     app_socket.receive(receive_buf, MAXLINE);
+//     printf("app_received: ");
+//     print_buf(receive_buf, MAXLINE);
+//     delete[] deliver_buf;
+//     deliver_buf = NULL;
+//     delete[] receive_buf;
+//     receive_buf = NULL;
+//     return;
+// }
+
 void frameTransfer(){
     visSocketApp app_socket = visSocketApp(APP_SOCKET_PATH, ALGO_SOCKET_PATH);
     app_socket.init();
-    uint8_t * deliver_buf = new uint8_t[BUF_LENGTH_FRAME];
-    //start two threads one for sending and one for receiving
-    getFrameBuf(deliver_buf, BUF_LENGTH_FRAME);
-    app_socket.deliver(deliver_buf, BUF_LENGTH_FRAME);
+
+    std::cout << "Delivering Image" << std::endl;
+    std::string imagePath = "/home/matts/fydp/ASL_Translator/test.png";
+    if (app_socket.deliver(imagePath) != 0) {
+        std::cerr << "Failed to deliver JPEG image: " << imagePath << std::endl;
+    } else {
+        std::cout << "JPEG image delivered successfully: " << imagePath << std::endl;
+    }
+
     sleep(1);
-    uint8_t * receive_buf = new uint8_t[MAXLINE];
-    app_socket.receive(receive_buf, MAXLINE);
-    printf("app_received: ");
-    print_buf(receive_buf, MAXLINE);
-    delete[] deliver_buf;
-    deliver_buf = NULL;
-    delete[] receive_buf;
-    receive_buf = NULL;
-    return;
+
+    std::cout << "Receiving Image" << std::endl;
+    std::string receivedImagePath = "/home/matts/fydp/ASL_Translator/out_test.png";
+    if (app_socket.receive(receivedImagePath) != 0) {
+        std::cerr << "Failed to receive JPEG image" << std::endl;
+    } else {
+        std::cout << "JPEG image received successfully: " << receivedImagePath << std::endl;
+    }
 }
