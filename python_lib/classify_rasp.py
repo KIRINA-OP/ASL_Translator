@@ -3,6 +3,7 @@ import sys
 import time
 from video_classifier import VideoClassifier
 from video_classifier import VideoClassifierOptions
+import visSocket
 
 _MODEL_PATH = 'final_model_50.tflite'
 _LABEL_PATH = 'good_label_map.txt'
@@ -17,6 +18,9 @@ cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, _DIM)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _DIM)
 
+algoSock = visSocket.VisSocketAlgo(visSocket.APP_SOCKET_PATH, visSocket.ALGO_SOCKET_PATH)
+algoSock.init()
+
 while cap.isOpened():
     success, image = cap.read()
     if not success:
@@ -29,4 +33,5 @@ while cap.isOpened():
       # Feed the frame to the video classification model.
     result = classifier.classify(frame_rgb)
     print(result)
+    algoSock.deliver(result)
     time.sleep(0.1)

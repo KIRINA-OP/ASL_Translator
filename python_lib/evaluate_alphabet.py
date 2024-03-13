@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import time
 import sys
+import visSocket
 
 with open('label_map_ASL.txt', 'r') as f:
       lines = f.readlines()
@@ -13,7 +14,8 @@ model = tf.keras.models.load_model('model')
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 32)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 32)
-
+algoSock = visSocket.VisSocketAlgo(visSocket.APP_SOCKET_PATH, visSocket.ALGO_SOCKET_PATH)
+algoSock.init()
 while cap.isOpened():
     success, image = cap.read()
     if not success:
@@ -29,6 +31,7 @@ while cap.isOpened():
     try:
         prediction = label_list[list(result[0]).index(1)]
         print(prediction)
+        algoSock.deliver(prediction)
     except:
         prediction = ''
     time.sleep(1)

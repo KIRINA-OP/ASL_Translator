@@ -1,6 +1,7 @@
 import cv2
 import sys
 import time
+import visSocket
 from video_classifier import VideoClassifier
 from video_classifier import VideoClassifierOptions
 
@@ -16,6 +17,8 @@ classifier = VideoClassifier(_MODEL_PATH, _LABEL_PATH, options)
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, _DIM)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _DIM)
+algoSock = visSocket.VisSocketAlgo(visSocket.APP_SOCKET_PATH, visSocket.ALGO_SOCKET_PATH)
+algoSock.init()
 
 while cap.isOpened():
     success, image = cap.read()
@@ -29,4 +32,5 @@ while cap.isOpened():
       # Feed the frame to the video classification model.
     result = classifier.classify(frame_rgb)
     print(result)
+    algoSock.deliver(result)
     time.sleep(0.1)
