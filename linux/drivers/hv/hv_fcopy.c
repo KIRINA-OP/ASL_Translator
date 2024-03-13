@@ -1,20 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * An implementation of file copy service.
  *
  * Copyright (C) 2014, Microsoft, Inc.
  *
  * Author : K. Y. Srinivasan <ksrinivasan@novell.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, GOOD TITLE or
- * NON INFRINGEMENT.  See the GNU General Public License for more
- * details.
- *
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -30,6 +20,16 @@
 #define WIN8_SRV_MAJOR		1
 #define WIN8_SRV_MINOR		1
 #define WIN8_SRV_VERSION	(WIN8_SRV_MAJOR << 16 | WIN8_SRV_MINOR)
+
+#define FCOPY_VER_COUNT 1
+static const int fcopy_versions[] = {
+	WIN8_SRV_VERSION
+};
+
+#define FW_VER_COUNT 1
+static const int fw_versions[] = {
+	UTIL_FW_VERSION
+};
 
 /*
  * Global state maintained for transaction that is being processed.
@@ -61,7 +61,6 @@ static DECLARE_WORK(fcopy_send_work, fcopy_send_data);
 static const char fcopy_devname[] = "vmbus/hv_fcopy";
 static u8 *recv_buffer;
 static struct hvutil_transport *hvt;
-static struct completion release_event;
 /*
  * This state maintains the version number registered by the daemon.
  */
@@ -161,6 +160,10 @@ static void fcopy_send_data(struct work_struct *dummy)
 		out_src = smsg_out;
 		break;
 
+	case WRITE_TO_FILE:
+		out_src = fcopy_transaction.fcopy_msg;
+		out_len = sizeof(struct hv_do_fcopy);
+		break;
 	default:
 		out_src = fcopy_transaction.fcopy_msg;
 		out_len = fcopy_transaction.recv_len;
@@ -177,8 +180,6 @@ static void fcopy_send_data(struct work_struct *dummy)
 		}
 	}
 	kfree(smsg_out);
-
-	return;
 }
 
 /*
@@ -228,8 +229,6 @@ void hv_fcopy_onchannelcallback(void *context)
 	u64 requestid;
 	struct hv_fcopy_hdr *fcopy_msg;
 	struct icmsg_hdr *icmsghdr;
-	struct icmsg_negotiate *negop = NULL;
-	int util_fw_version;
 	int fcopy_srv_version;
 
 	if (fcopy_transaction.state > HVUTIL_READY)
@@ -243,10 +242,15 @@ void hv_fcopy_onchannelcallback(void *context)
 	icmsghdr = (struct icmsg_hdr *)&recv_buffer[
 			sizeof(struct vmbuspipe_hdr)];
 	if (icmsghdr->icmsgtype == ICMSGTYPE_NEGOTIATE) {
-		util_fw_version = UTIL_FW_VERSION;
-		fcopy_srv_version = WIN8_SRV_VERSION;
-		vmbus_prep_negotiate_resp(icmsghdr, negop, recv_buffer,
-				util_fw_version, fcopy_srv_version);
+		if (vmbus_prep_negotiate_resp(icmsghdr, recv_buffer,
+				fw_versions, FW_VER_COUNT,
+				fcopy_versions, FCOPY_VER_COUNT,
+				NULL, &fcopy_srv_version)) {
+
+			pr_info("FCopy IC version %d.%d\n",
+				fcopy_srv_version >> 16,
+				fcopy_srv_version & 0xFFFF);
+		}
 	} else {
 		fcopy_msg = (struct hv_fcopy_hdr *)&recv_buffer[
 				sizeof(struct vmbuspipe_hdr) +
@@ -318,7 +322,6 @@ static void fcopy_on_reset(void)
 
 	if (cancel_delayed_work_sync(&fcopy_timeout_work))
 		fcopy_respond_to_host(HV_E_FAIL);
-	complete(&release_event);
 }
 
 int hv_fcopy_init(struct hv_util_service *srv)
@@ -326,7 +329,6 @@ int hv_fcopy_init(struct hv_util_service *srv)
 	recv_buffer = srv->recv_buffer;
 	fcopy_transaction.recv_channel = srv->channel;
 
-	init_completion(&release_event);
 	/*
 	 * When this driver loads, the user level daemon that
 	 * processes the host requests may not yet be running.
@@ -348,5 +350,4 @@ void hv_fcopy_deinit(void)
 	fcopy_transaction.state = HVUTIL_DEVICE_DYING;
 	cancel_delayed_work_sync(&fcopy_timeout_work);
 	hvutil_transport_destroy(hvt);
-	wait_for_completion(&release_event);
 }

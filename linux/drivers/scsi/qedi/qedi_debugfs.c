@@ -1,10 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * QLogic iSCSI Offload Driver
  * Copyright (c) 2016 Cavium Inc.
- *
- * This software is available under the terms of the GNU General Public License
- * (GPL) Version 2, available from the file COPYING in the main directory of
- * this source tree.
  */
 
 #include "qedi.h"
@@ -14,36 +11,25 @@
 #include <linux/debugfs.h>
 #include <linux/module.h>
 
-int do_not_recover;
+int qedi_do_not_recover;
 static struct dentry *qedi_dbg_root;
 
 void
 qedi_dbg_host_init(struct qedi_dbg_ctx *qedi,
-		   struct qedi_debugfs_ops *dops,
+		   const struct qedi_debugfs_ops *dops,
 		   const struct file_operations *fops)
 {
 	char host_dirname[32];
-	struct dentry *file_dentry = NULL;
 
 	sprintf(host_dirname, "host%u", qedi->host_no);
 	qedi->bdf_dentry = debugfs_create_dir(host_dirname, qedi_dbg_root);
-	if (!qedi->bdf_dentry)
-		return;
 
 	while (dops) {
 		if (!(dops->name))
 			break;
 
-		file_dentry = debugfs_create_file(dops->name, 0600,
-						  qedi->bdf_dentry, qedi,
-						  fops);
-		if (!file_dentry) {
-			QEDI_INFO(qedi, QEDI_LOG_DEBUGFS,
-				  "Debugfs entry %s creation failed\n",
-				  dops->name);
-			debugfs_remove_recursive(qedi->bdf_dentry);
-			return;
-		}
+		debugfs_create_file(dops->name, 0600, qedi->bdf_dentry, qedi,
+				    fops);
 		dops++;
 		fops++;
 	}
@@ -60,8 +46,6 @@ void
 qedi_dbg_init(char *drv_name)
 {
 	qedi_dbg_root = debugfs_create_dir(drv_name, NULL);
-	if (!qedi_dbg_root)
-		QEDI_INFO(NULL, QEDI_LOG_DEBUGFS, "Init of debugfs failed\n");
 }
 
 void
@@ -74,22 +58,22 @@ qedi_dbg_exit(void)
 static ssize_t
 qedi_dbg_do_not_recover_enable(struct qedi_dbg_ctx *qedi_dbg)
 {
-	if (!do_not_recover)
-		do_not_recover = 1;
+	if (!qedi_do_not_recover)
+		qedi_do_not_recover = 1;
 
 	QEDI_INFO(qedi_dbg, QEDI_LOG_DEBUGFS, "do_not_recover=%d\n",
-		  do_not_recover);
+		  qedi_do_not_recover);
 	return 0;
 }
 
 static ssize_t
 qedi_dbg_do_not_recover_disable(struct qedi_dbg_ctx *qedi_dbg)
 {
-	if (do_not_recover)
-		do_not_recover = 0;
+	if (qedi_do_not_recover)
+		qedi_do_not_recover = 0;
 
 	QEDI_INFO(qedi_dbg, QEDI_LOG_DEBUGFS, "do_not_recover=%d\n",
-		  do_not_recover);
+		  qedi_do_not_recover);
 	return 0;
 }
 
@@ -99,7 +83,7 @@ static struct qedi_list_of_funcs qedi_dbg_do_not_recover_ops[] = {
 	{ NULL, NULL }
 };
 
-struct qedi_debugfs_ops qedi_debugfs_ops[] = {
+const struct qedi_debugfs_ops qedi_debugfs_ops[] = {
 	{ "gbl_ctx", NULL },
 	{ "do_not_recover", qedi_dbg_do_not_recover_ops},
 	{ "io_trace", NULL },
@@ -141,7 +125,7 @@ qedi_dbg_do_not_recover_cmd_read(struct file *filp, char __user *buffer,
 	if (*ppos)
 		return 0;
 
-	cnt = sprintf(buffer, "do_not_recover=%d\n", do_not_recover);
+	cnt = sprintf(buffer, "do_not_recover=%d\n", qedi_do_not_recover);
 	cnt = min_t(int, count, cnt - *ppos);
 	*ppos += cnt;
 	return cnt;
@@ -152,7 +136,7 @@ qedi_gbl_ctx_show(struct seq_file *s, void *unused)
 {
 	struct qedi_fastpath *fp = NULL;
 	struct qed_sb_info *sb_info = NULL;
-	struct status_block *sb = NULL;
+	struct status_block_e4 *sb = NULL;
 	struct global_queue *que = NULL;
 	int id;
 	u16 prod_idx;
@@ -168,7 +152,7 @@ qedi_gbl_ctx_show(struct seq_file *s, void *unused)
 		sb_info = fp->sb_info;
 		sb = sb_info->sb_virt;
 		prod_idx = (sb->pi_array[QEDI_PROTO_CQ_PROD_IDX] &
-			    STATUS_BLOCK_PROD_INDEX_MASK);
+			    STATUS_BLOCK_E4_PROD_INDEX_MASK);
 		seq_printf(s, "SB PROD IDX: %d\n", prod_idx);
 		que = qedi->global_queues[fp->sb_id];
 		seq_printf(s, "DRV CONS IDX: %d\n", que->cq_cons_idx);
@@ -240,5 +224,5 @@ const struct file_operations qedi_dbg_fops[] = {
 	qedi_dbg_fileops_seq(qedi, gbl_ctx),
 	qedi_dbg_fileops(qedi, do_not_recover),
 	qedi_dbg_fileops_seq(qedi, io_trace),
-	{ NULL, NULL },
+	{ },
 };

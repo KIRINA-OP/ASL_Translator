@@ -1,14 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * drivers/net/wan/slic_ds26522.c
  *
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
  *
  * Author:Zhao Qiang<qiang.zhao@nxp.com>
- *
- * This program is free software; you can redistribute  it and/or modify it
- * under  the terms of  the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the  License, or (at your
- * option) any later version.
  */
 
 #include <linux/bitrev.h>
@@ -241,7 +237,6 @@ static struct spi_driver slic_ds26522_driver = {
 	.driver = {
 		   .name = "ds26522",
 		   .bus = &spi_bus_type,
-		   .owner = THIS_MODULE,
 		   .of_match_table = slic_ds26522_match,
 		   },
 	.probe = slic_ds26522_probe,
@@ -249,15 +244,4 @@ static struct spi_driver slic_ds26522_driver = {
 	.id_table = slic_ds26522_id,
 };
 
-static int __init slic_ds26522_init(void)
-{
-	return spi_register_driver(&slic_ds26522_driver);
-}
-
-static void __exit slic_ds26522_exit(void)
-{
-	spi_unregister_driver(&slic_ds26522_driver);
-}
-
-module_init(slic_ds26522_init);
-module_exit(slic_ds26522_exit);
+module_spi_driver(slic_ds26522_driver);

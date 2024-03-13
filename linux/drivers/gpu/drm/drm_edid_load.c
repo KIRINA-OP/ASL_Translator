@@ -1,22 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
    drm_edid_load.c: use a built-in EDID data set or load it via the firmware
 		    interface
 
    Copyright (C) 2012 Carsten Emde <C.Emde@osadl.org>
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU General Public License
-   as published by the Free Software Foundation; either version 2
-   of the License, or (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
 */
 
 #include <linux/module.h>
@@ -30,6 +18,22 @@ static char edid_firmware[PATH_MAX];
 module_param_string(edid_firmware, edid_firmware, sizeof(edid_firmware), 0644);
 MODULE_PARM_DESC(edid_firmware, "Do not probe monitor, use specified EDID blob "
 	"from built-in data or /lib/firmware instead. ");
+
+/* Use only for backward compatibility with drm_kms_helper.edid_firmware */
+int __drm_set_edid_firmware_path(const char *path)
+{
+	scnprintf(edid_firmware, sizeof(edid_firmware), "%s", path);
+
+	return 0;
+}
+EXPORT_SYMBOL(__drm_set_edid_firmware_path);
+
+/* Use only for backward compatibility with drm_kms_helper.edid_firmware */
+int __drm_get_edid_firmware_path(char *buf, size_t bufsize)
+{
+	return scnprintf(buf, bufsize, "%s", edid_firmware);
+}
+EXPORT_SYMBOL(__drm_get_edid_firmware_path);
 
 #define GENERIC_EDIDS 6
 static const char * const generic_edid_name[GENERIC_EDIDS] = {
@@ -256,15 +260,14 @@ out:
 	return edid;
 }
 
-int drm_load_edid_firmware(struct drm_connector *connector)
+struct edid *drm_load_edid_firmware(struct drm_connector *connector)
 {
 	const char *connector_name = connector->name;
 	char *edidname, *last, *colon, *fwstr, *edidstr, *fallback = NULL;
-	int ret;
 	struct edid *edid;
 
 	if (edid_firmware[0] == '\0')
-		return 0;
+		return ERR_PTR(-ENOENT);
 
 	/*
 	 * If there are multiple edid files specified and separated
@@ -293,7 +296,7 @@ int drm_load_edid_firmware(struct drm_connector *connector)
 	if (!edidname) {
 		if (!fallback) {
 			kfree(fwstr);
-			return 0;
+			return ERR_PTR(-ENOENT);
 		}
 		edidname = fallback;
 	}
@@ -305,13 +308,5 @@ int drm_load_edid_firmware(struct drm_connector *connector)
 	edid = edid_load(connector, edidname, connector_name);
 	kfree(fwstr);
 
-	if (IS_ERR_OR_NULL(edid))
-		return 0;
-
-	drm_mode_connector_update_edid_property(connector, edid);
-	ret = drm_add_edid_modes(connector, edid);
-	drm_edid_to_eld(connector, edid);
-	kfree(edid);
-
-	return ret;
+	return edid;
 }

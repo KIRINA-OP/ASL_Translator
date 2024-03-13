@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * pm_runtime.h - Device run-time power management helper functions.
  *
  * Copyright (C) 2009 Rafael J. Wysocki <rjw@sisk.pl>
- *
- * This file is released under the GPLv2.
  */
 
 #ifndef _LINUX_PM_RUNTIME_H
@@ -51,7 +50,7 @@ extern void pm_runtime_no_callbacks(struct device *dev);
 extern void pm_runtime_irq_safe(struct device *dev);
 extern void __pm_runtime_use_autosuspend(struct device *dev, bool use);
 extern void pm_runtime_set_autosuspend_delay(struct device *dev, int delay);
-extern unsigned long pm_runtime_autosuspend_expiration(struct device *dev);
+extern u64 pm_runtime_autosuspend_expiration(struct device *dev);
 extern void pm_runtime_update_max_time_suspended(struct device *dev,
 						 s64 delta_ns);
 extern void pm_runtime_set_memalloc_noio(struct device *dev, bool enable);
@@ -74,16 +73,6 @@ static inline void pm_runtime_get_noresume(struct device *dev)
 static inline void pm_runtime_put_noidle(struct device *dev)
 {
 	atomic_add_unless(&dev->power.usage_count, -1, 0);
-}
-
-static inline bool device_run_wake(struct device *dev)
-{
-	return dev->power.run_wake;
-}
-
-static inline void device_set_run_wake(struct device *dev, bool enable)
-{
-	dev->power.run_wake = enable;
 }
 
 static inline bool pm_runtime_suspended(struct device *dev)
@@ -115,13 +104,15 @@ static inline bool pm_runtime_callbacks_present(struct device *dev)
 
 static inline void pm_runtime_mark_last_busy(struct device *dev)
 {
-	ACCESS_ONCE(dev->power.last_busy) = jiffies;
+	WRITE_ONCE(dev->power.last_busy, ktime_get_mono_fast_ns());
 }
 
 static inline bool pm_runtime_is_irq_safe(struct device *dev)
 {
 	return dev->power.irq_safe;
 }
+
+extern u64 pm_runtime_suspended_time(struct device *dev);
 
 #else /* !CONFIG_PM */
 
@@ -163,8 +154,6 @@ static inline void pm_runtime_forbid(struct device *dev) {}
 static inline void pm_suspend_ignore_children(struct device *dev, bool enable) {}
 static inline void pm_runtime_get_noresume(struct device *dev) {}
 static inline void pm_runtime_put_noidle(struct device *dev) {}
-static inline bool device_run_wake(struct device *dev) { return false; }
-static inline void device_set_run_wake(struct device *dev, bool enable) {}
 static inline bool pm_runtime_suspended(struct device *dev) { return false; }
 static inline bool pm_runtime_active(struct device *dev) { return true; }
 static inline bool pm_runtime_status_suspended(struct device *dev) { return false; }
@@ -180,7 +169,7 @@ static inline void __pm_runtime_use_autosuspend(struct device *dev,
 						bool use) {}
 static inline void pm_runtime_set_autosuspend_delay(struct device *dev,
 						int delay) {}
-static inline unsigned long pm_runtime_autosuspend_expiration(
+static inline u64 pm_runtime_autosuspend_expiration(
 				struct device *dev) { return 0; }
 static inline void pm_runtime_set_memalloc_noio(struct device *dev,
 						bool enable){}

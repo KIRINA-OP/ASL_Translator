@@ -24,8 +24,18 @@
 #ifndef __INTEL_FRONTBUFFER_H__
 #define __INTEL_FRONTBUFFER_H__
 
+#include "i915_gem_object.h"
+
 struct drm_i915_private;
 struct drm_i915_gem_object;
+
+enum fb_op_origin {
+	ORIGIN_GTT,
+	ORIGIN_CPU,
+	ORIGIN_CS,
+	ORIGIN_FLIP,
+	ORIGIN_DIRTYFB,
+};
 
 void intel_frontbuffer_flip_prepare(struct drm_i915_private *dev_priv,
 				    unsigned frontbuffer_bits);
@@ -38,7 +48,6 @@ void __intel_fb_obj_invalidate(struct drm_i915_gem_object *obj,
 			       enum fb_op_origin origin,
 			       unsigned int frontbuffer_bits);
 void __intel_fb_obj_flush(struct drm_i915_gem_object *obj,
-			  bool retire,
 			  enum fb_op_origin origin,
 			  unsigned int frontbuffer_bits);
 
@@ -69,15 +78,12 @@ static inline bool intel_fb_obj_invalidate(struct drm_i915_gem_object *obj,
 /**
  * intel_fb_obj_flush - flush frontbuffer object
  * @obj: GEM object to flush
- * @retire: set when retiring asynchronous rendering
  * @origin: which operation caused the flush
  *
  * This function gets called every time rendering on the given object has
- * completed and frontbuffer caching can be started again. If @retire is true
- * then any delayed flushes will be unblocked.
+ * completed and frontbuffer caching can be started again.
  */
 static inline void intel_fb_obj_flush(struct drm_i915_gem_object *obj,
-				      bool retire,
 				      enum fb_op_origin origin)
 {
 	unsigned int frontbuffer_bits;
@@ -86,7 +92,7 @@ static inline void intel_fb_obj_flush(struct drm_i915_gem_object *obj,
 	if (!frontbuffer_bits)
 		return;
 
-	__intel_fb_obj_flush(obj, retire, origin, frontbuffer_bits);
+	__intel_fb_obj_flush(obj, origin, frontbuffer_bits);
 }
 
 #endif /* __INTEL_FRONTBUFFER_H__ */

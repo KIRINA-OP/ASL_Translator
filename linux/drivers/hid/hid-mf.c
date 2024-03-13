@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Force feedback support for Mayflash game controller adapters.
  *
@@ -6,24 +7,17 @@
  *
  * Tested with:
  * 0079:1801 "DragonRise Inc. Mayflash PS3 Game Controller Adapter"
+ * 0079:1803 "DragonRise Inc. Mayflash Wireless Sensor DolphinBar"
+ * 0079:1843 "DragonRise Inc. Mayflash GameCube Game Controller Adapter"
+ * 0079:1844 "DragonRise Inc. Mayflash GameCube Game Controller Adapter (v04)"
  *
  * The following adapters probably work too, but need to be tested:
  * 0079:1800 "DragonRise Inc. Mayflash WIIU Game Controller Adapter"
- * 0079:1843 "DragonRise Inc. Mayflash GameCube Game Controller Adapter"
  *
- * Copyright (c) 2016 Marcel Hasler <mahasler@gmail.com>
+ * Copyright (c) 2016-2017 Marcel Hasler <mahasler@gmail.com>
  */
 
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/input.h>
@@ -125,8 +119,8 @@ static int mf_probe(struct hid_device *hid, const struct hid_device_id *id)
 
 	dev_dbg(&hid->dev, "Mayflash HID hardware probe...\n");
 
-	/* Split device into four inputs */
-	hid->quirks |= HID_QUIRK_MULTI_INPUT;
+	/* Apply quirks as needed */
+	hid->quirks |= id->driver_data;
 
 	error = hid_parse(hid);
 	if (error) {
@@ -151,7 +145,14 @@ static int mf_probe(struct hid_device *hid, const struct hid_device_id *id)
 }
 
 static const struct hid_device_id mf_devices[] = {
-	{ HID_USB_DEVICE(USB_VENDOR_ID_DRAGONRISE, USB_DEVICE_ID_DRAGONRISE_PS3),  },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_DRAGONRISE, USB_DEVICE_ID_DRAGONRISE_PS3),
+		.driver_data = HID_QUIRK_MULTI_INPUT },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_DRAGONRISE, USB_DEVICE_ID_DRAGONRISE_DOLPHINBAR),
+		.driver_data = HID_QUIRK_MULTI_INPUT },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_DRAGONRISE, USB_DEVICE_ID_DRAGONRISE_GAMECUBE1),
+		.driver_data = HID_QUIRK_MULTI_INPUT },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_DRAGONRISE, USB_DEVICE_ID_DRAGONRISE_GAMECUBE2),
+		.driver_data = 0 }, /* No quirk required */
 	{ }
 };
 MODULE_DEVICE_TABLE(hid, mf_devices);

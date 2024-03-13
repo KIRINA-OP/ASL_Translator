@@ -1,20 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 51
- * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Artem Bityutskiy (Битюцкий Артём)
  *          Adrian Hunter
@@ -61,12 +49,6 @@
 #include <linux/xattr.h>
 
 /*
- * Limit the number of extended attributes per inode so that the total size
- * (@xattr_size) is guaranteeded to fit in an 'unsigned int'.
- */
-#define MAX_XATTRS_PER_INODE 65535
-
-/*
  * Extended attribute type constants.
  *
  * USER_XATTR: user extended attribute ("user.*")
@@ -106,7 +88,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 				.new_ino_d = ALIGN(size, 8), .dirtied_ino = 1,
 				.dirtied_ino_d = ALIGN(host_ui->data_len, 8) };
 
-	if (host_ui->xattr_cnt >= MAX_XATTRS_PER_INODE) {
+	if (host_ui->xattr_cnt >= ubifs_xattr_max_cnt(c)) {
 		ubifs_err(c, "inode %lu already has too many xattrs (%d), cannot create more",
 			  host->i_ino, host_ui->xattr_cnt);
 		return -ENOSPC;
@@ -139,7 +121,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	inode->i_op = &empty_iops;
 	inode->i_fop = &empty_fops;
 
-	inode->i_flags |= S_SYNC | S_NOATIME | S_NOCMTIME | S_NOQUOTA;
+	inode->i_flags |= S_SYNC | S_NOATIME | S_NOCMTIME;
 	ui = ubifs_inode(inode);
 	ui->xattr = 1;
 	ui->flags |= UBIFS_XATTR_FL;
@@ -152,7 +134,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	ui->data_len = size;
 
 	mutex_lock(&host_ui->ui_mutex);
-	host->i_ctime = ubifs_current_time(host);
+	host->i_ctime = current_time(host);
 	host_ui->xattr_cnt += 1;
 	host_ui->xattr_size += CALC_DENT_SIZE(fname_len(nm));
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);
@@ -170,6 +152,7 @@ static int create_xattr(struct ubifs_info *c, struct inode *host,
 	err = ubifs_jnl_update(c, host, nm, inode, 0, 1);
 	if (err)
 		goto out_cancel;
+	ubifs_set_inode_flags(host);
 	mutex_unlock(&host_ui->ui_mutex);
 
 	ubifs_release_budget(c, &req);
@@ -215,7 +198,7 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 	struct ubifs_budget_req req = { .dirtied_ino = 2,
 		.dirtied_ino_d = ALIGN(size, 8) + ALIGN(host_ui->data_len, 8) };
 
-	ubifs_assert(ui->data_len == inode->i_size);
+	ubifs_assert(c, ui->data_len == inode->i_size);
 	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
@@ -234,7 +217,7 @@ static int change_xattr(struct ubifs_info *c, struct inode *host,
 	mutex_unlock(&ui->ui_mutex);
 
 	mutex_lock(&host_ui->ui_mutex);
-	host->i_ctime = ubifs_current_time(host);
+	host->i_ctime = current_time(host);
 	host_ui->xattr_size -= CALC_XATTR_BYTES(old_size);
 	host_ui->xattr_size += CALC_XATTR_BYTES(size);
 
@@ -280,7 +263,7 @@ static struct inode *iget_xattr(struct ubifs_info *c, ino_t inum)
 }
 
 int ubifs_xattr_set(struct inode *host, const char *name, const void *value,
-		    size_t size, int flags)
+		    size_t size, int flags, bool check_lock)
 {
 	struct inode *inode;
 	struct ubifs_info *c = host->i_sb->s_fs_info;
@@ -289,13 +272,8 @@ int ubifs_xattr_set(struct inode *host, const char *name, const void *value,
 	union ubifs_key key;
 	int err;
 
-	/*
-	 * Creating an encryption context is done unlocked since we
-	 * operate on a new inode which is not visible to other users
-	 * at this point.
-	 */
-	if (strcmp(name, UBIFS_XATTR_NAME_ENCRYPTION_CONTEXT) != 0)
-		ubifs_assert(inode_is_locked(host));
+	if (check_lock)
+		ubifs_assert(c, inode_is_locked(host));
 
 	if (size > UBIFS_MAX_INO_DATA)
 		return -ERANGE;
@@ -378,15 +356,13 @@ ssize_t ubifs_xattr_get(struct inode *host, const char *name, void *buf,
 	}
 
 	ui = ubifs_inode(inode);
-	ubifs_assert(inode->i_size == ui->data_len);
-	ubifs_assert(ubifs_inode(host)->xattr_size > ui->data_len);
+	ubifs_assert(c, inode->i_size == ui->data_len);
+	ubifs_assert(c, ubifs_inode(host)->xattr_size > ui->data_len);
 
 	mutex_lock(&ui->ui_mutex);
 	if (buf) {
 		/* If @buf is %NULL we are supposed to return the length */
 		if (ui->data_len > size) {
-			ubifs_err(c, "buffer size %zd, xattr len %d",
-				  size, ui->data_len);
 			err = -ERANGE;
 			goto out_iput;
 		}
@@ -468,7 +444,7 @@ ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 		return err;
 	}
 
-	ubifs_assert(written <= size);
+	ubifs_assert(c, written <= size);
 	return written;
 }
 
@@ -481,14 +457,14 @@ static int remove_xattr(struct ubifs_info *c, struct inode *host,
 	struct ubifs_budget_req req = { .dirtied_ino = 2, .mod_dent = 1,
 				.dirtied_ino_d = ALIGN(host_ui->data_len, 8) };
 
-	ubifs_assert(ui->data_len == inode->i_size);
+	ubifs_assert(c, ui->data_len == inode->i_size);
 
 	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
 
 	mutex_lock(&host_ui->ui_mutex);
-	host->i_ctime = ubifs_current_time(host);
+	host->i_ctime = current_time(host);
 	host_ui->xattr_cnt -= 1;
 	host_ui->xattr_size -= CALC_DENT_SIZE(fname_len(nm));
 	host_ui->xattr_size -= CALC_XATTR_BYTES(ui->data_len);
@@ -513,6 +489,91 @@ out_cancel:
 	return err;
 }
 
+int ubifs_purge_xattrs(struct inode *host)
+{
+	union ubifs_key key;
+	struct ubifs_info *c = host->i_sb->s_fs_info;
+	struct ubifs_dent_node *xent, *pxent = NULL;
+	struct inode *xino;
+	struct fscrypt_name nm = {0};
+	int err;
+
+	if (ubifs_inode(host)->xattr_cnt < ubifs_xattr_max_cnt(c))
+		return 0;
+
+	ubifs_warn(c, "inode %lu has too many xattrs, doing a non-atomic deletion",
+		   host->i_ino);
+
+	lowest_xent_key(c, &key, host->i_ino);
+	while (1) {
+		xent = ubifs_tnc_next_ent(c, &key, &nm);
+		if (IS_ERR(xent)) {
+			err = PTR_ERR(xent);
+			break;
+		}
+
+		fname_name(&nm) = xent->name;
+		fname_len(&nm) = le16_to_cpu(xent->nlen);
+
+		xino = ubifs_iget(c->vfs_sb, le64_to_cpu(xent->inum));
+		if (IS_ERR(xino)) {
+			err = PTR_ERR(xino);
+			ubifs_err(c, "dead directory entry '%s', error %d",
+				  xent->name, err);
+			ubifs_ro_mode(c, err);
+			kfree(pxent);
+			return err;
+		}
+
+		ubifs_assert(c, ubifs_inode(xino)->xattr);
+
+		clear_nlink(xino);
+		err = remove_xattr(c, host, xino, &nm);
+		if (err) {
+			kfree(pxent);
+			iput(xino);
+			ubifs_err(c, "cannot remove xattr, error %d", err);
+			return err;
+		}
+
+		iput(xino);
+
+		kfree(pxent);
+		pxent = xent;
+		key_read(c, &xent->key, &key);
+	}
+
+	kfree(pxent);
+	if (err != -ENOENT) {
+		ubifs_err(c, "cannot find next direntry, error %d", err);
+		return err;
+	}
+
+	return 0;
+}
+
+/**
+ * ubifs_evict_xattr_inode - Evict an xattr inode.
+ * @c: UBIFS file-system description object
+ * @xattr_inum: xattr inode number
+ *
+ * When an inode that hosts xattrs is being removed we have to make sure
+ * that cached inodes of the xattrs also get removed from the inode cache
+ * otherwise we'd waste memory. This function looks up an inode from the
+ * inode cache and clears the link counter such that iput() will evict
+ * the inode.
+ */
+void ubifs_evict_xattr_inode(struct ubifs_info *c, ino_t xattr_inum)
+{
+	struct inode *inode;
+
+	inode = ilookup(c->vfs_sb, xattr_inum);
+	if (inode) {
+		clear_nlink(inode);
+		iput(inode);
+	}
+}
+
 static int ubifs_xattr_remove(struct inode *host, const char *name)
 {
 	struct inode *inode;
@@ -522,7 +583,7 @@ static int ubifs_xattr_remove(struct inode *host, const char *name)
 	union ubifs_key key;
 	int err;
 
-	ubifs_assert(inode_is_locked(host));
+	ubifs_assert(c, inode_is_locked(host));
 
 	if (fname_len(&nm) > UBIFS_MAX_NLEN)
 		return -ENAMETOOLONG;
@@ -545,7 +606,7 @@ static int ubifs_xattr_remove(struct inode *host, const char *name)
 		goto out_free;
 	}
 
-	ubifs_assert(inode->i_nlink == 1);
+	ubifs_assert(c, inode->i_nlink == 1);
 	clear_nlink(inode);
 	err = remove_xattr(c, host, inode, &nm);
 	if (err)
@@ -559,6 +620,7 @@ out_free:
 	return err;
 }
 
+#ifdef CONFIG_UBIFS_FS_SECURITY
 static int init_xattrs(struct inode *inode, const struct xattr *xattr_array,
 		      void *fs_info)
 {
@@ -575,8 +637,12 @@ static int init_xattrs(struct inode *inode, const struct xattr *xattr_array,
 		}
 		strcpy(name, XATTR_SECURITY_PREFIX);
 		strcpy(name + XATTR_SECURITY_PREFIX_LEN, xattr->name);
+		/*
+		 * creating a new inode without holding the inode rwsem,
+		 * no need to check whether inode is locked.
+		 */
 		err = ubifs_xattr_set(inode, name, xattr->value,
-				      xattr->value_len, 0);
+				      xattr->value_len, 0, false);
 		kfree(name);
 		if (err < 0)
 			break;
@@ -599,6 +665,7 @@ int ubifs_init_security(struct inode *dentry, struct inode *inode,
 	}
 	return err;
 }
+#endif
 
 static int xattr_get(const struct xattr_handler *handler,
 			   struct dentry *dentry, struct inode *inode,
@@ -622,7 +689,7 @@ static int xattr_set(const struct xattr_handler *handler,
 	name = xattr_full_name(handler, name);
 
 	if (value)
-		return ubifs_xattr_set(inode, name, value, size, flags);
+		return ubifs_xattr_set(inode, name, value, size, flags, true);
 	else
 		return ubifs_xattr_remove(inode, name);
 }
@@ -639,15 +706,19 @@ static const struct xattr_handler ubifs_trusted_xattr_handler = {
 	.set = xattr_set,
 };
 
+#ifdef CONFIG_UBIFS_FS_SECURITY
 static const struct xattr_handler ubifs_security_xattr_handler = {
 	.prefix = XATTR_SECURITY_PREFIX,
 	.get = xattr_get,
 	.set = xattr_set,
 };
+#endif
 
 const struct xattr_handler *ubifs_xattr_handlers[] = {
 	&ubifs_user_xattr_handler,
 	&ubifs_trusted_xattr_handler,
+#ifdef CONFIG_UBIFS_FS_SECURITY
 	&ubifs_security_xattr_handler,
+#endif
 	NULL
 };

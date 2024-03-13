@@ -1,18 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * This driver supports the analog controls for the internal codec
  * found in Allwinner's A31s, A23, A33 and H3 SoCs.
  *
  * Copyright 2016 Chen-Yu Tsai <wens@csie.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/io.h>
@@ -26,6 +17,8 @@
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
+
+#include "sun8i-adda-pr-regmap.h"
 
 /* Codec analog control register offsets and bit fields */
 #define SUN8I_ADDA_HP_VOLC		0x00
@@ -120,81 +113,6 @@
 #define SUN8I_ADDA_ADC_AP_EN_ADCLEN		6
 #define SUN8I_ADDA_ADC_AP_EN_ADCG		0
 
-/* Analog control register access bits */
-#define ADDA_PR			0x0		/* PRCM base + 0x1c0 */
-#define ADDA_PR_RESET			BIT(28)
-#define ADDA_PR_WRITE			BIT(24)
-#define ADDA_PR_ADDR_SHIFT		16
-#define ADDA_PR_ADDR_MASK		GENMASK(4, 0)
-#define ADDA_PR_DATA_IN_SHIFT		8
-#define ADDA_PR_DATA_IN_MASK		GENMASK(7, 0)
-#define ADDA_PR_DATA_OUT_SHIFT		0
-#define ADDA_PR_DATA_OUT_MASK		GENMASK(7, 0)
-
-/* regmap access bits */
-static int adda_reg_read(void *context, unsigned int reg, unsigned int *val)
-{
-	void __iomem *base = (void __iomem *)context;
-	u32 tmp;
-
-	/* De-assert reset */
-	writel(readl(base) | ADDA_PR_RESET, base);
-
-	/* Clear write bit */
-	writel(readl(base) & ~ADDA_PR_WRITE, base);
-
-	/* Set register address */
-	tmp = readl(base);
-	tmp &= ~(ADDA_PR_ADDR_MASK << ADDA_PR_ADDR_SHIFT);
-	tmp |= (reg & ADDA_PR_ADDR_MASK) << ADDA_PR_ADDR_SHIFT;
-	writel(tmp, base);
-
-	/* Read back value */
-	*val = readl(base) & ADDA_PR_DATA_OUT_MASK;
-
-	return 0;
-}
-
-static int adda_reg_write(void *context, unsigned int reg, unsigned int val)
-{
-	void __iomem *base = (void __iomem *)context;
-	u32 tmp;
-
-	/* De-assert reset */
-	writel(readl(base) | ADDA_PR_RESET, base);
-
-	/* Set register address */
-	tmp = readl(base);
-	tmp &= ~(ADDA_PR_ADDR_MASK << ADDA_PR_ADDR_SHIFT);
-	tmp |= (reg & ADDA_PR_ADDR_MASK) << ADDA_PR_ADDR_SHIFT;
-	writel(tmp, base);
-
-	/* Set data to write */
-	tmp = readl(base);
-	tmp &= ~(ADDA_PR_DATA_IN_MASK << ADDA_PR_DATA_IN_SHIFT);
-	tmp |= (val & ADDA_PR_DATA_IN_MASK) << ADDA_PR_DATA_IN_SHIFT;
-	writel(tmp, base);
-
-	/* Set write bit to signal a write */
-	writel(readl(base) | ADDA_PR_WRITE, base);
-
-	/* Clear write bit */
-	writel(readl(base) & ~ADDA_PR_WRITE, base);
-
-	return 0;
-}
-
-static const struct regmap_config adda_pr_regmap_cfg = {
-	.name		= "adda-pr",
-	.reg_bits	= 5,
-	.reg_stride	= 1,
-	.val_bits	= 8,
-	.reg_read	= adda_reg_read,
-	.reg_write	= adda_reg_write,
-	.fast_io	= true,
-	.max_register	= 24,
-};
-
 /* mixer controls */
 static const struct snd_kcontrol_new sun8i_codec_mixer_controls[] = {
 	SOC_DAPM_DOUBLE_R("DAC Playback Switch",
@@ -219,6 +137,22 @@ static const struct snd_kcontrol_new sun8i_codec_mixer_controls[] = {
 			  SUN8I_ADDA_LOMIXSC_MIC2, 1, 0),
 };
 
+/* mixer controls */
+static const struct snd_kcontrol_new sun8i_v3s_codec_mixer_controls[] = {
+	SOC_DAPM_DOUBLE_R("DAC Playback Switch",
+			  SUN8I_ADDA_LOMIXSC,
+			  SUN8I_ADDA_ROMIXSC,
+			  SUN8I_ADDA_LOMIXSC_DACL, 1, 0),
+	SOC_DAPM_DOUBLE_R("DAC Reversed Playback Switch",
+			  SUN8I_ADDA_LOMIXSC,
+			  SUN8I_ADDA_ROMIXSC,
+			  SUN8I_ADDA_LOMIXSC_DACR, 1, 0),
+	SOC_DAPM_DOUBLE_R("Mic1 Playback Switch",
+			  SUN8I_ADDA_LOMIXSC,
+			  SUN8I_ADDA_ROMIXSC,
+			  SUN8I_ADDA_LOMIXSC_MIC1, 1, 0),
+};
+
 /* ADC mixer controls */
 static const struct snd_kcontrol_new sun8i_codec_adc_mixer_controls[] = {
 	SOC_DAPM_DOUBLE_R("Mixer Capture Switch",
@@ -241,6 +175,22 @@ static const struct snd_kcontrol_new sun8i_codec_adc_mixer_controls[] = {
 			  SUN8I_ADDA_LADCMIXSC,
 			  SUN8I_ADDA_RADCMIXSC,
 			  SUN8I_ADDA_LADCMIXSC_MIC2, 1, 0),
+};
+
+/* ADC mixer controls */
+static const struct snd_kcontrol_new sun8i_v3s_codec_adc_mixer_controls[] = {
+	SOC_DAPM_DOUBLE_R("Mixer Capture Switch",
+			  SUN8I_ADDA_LADCMIXSC,
+			  SUN8I_ADDA_RADCMIXSC,
+			  SUN8I_ADDA_LADCMIXSC_OMIXRL, 1, 0),
+	SOC_DAPM_DOUBLE_R("Mixer Reversed Capture Switch",
+			  SUN8I_ADDA_LADCMIXSC,
+			  SUN8I_ADDA_RADCMIXSC,
+			  SUN8I_ADDA_LADCMIXSC_OMIXRR, 1, 0),
+	SOC_DAPM_DOUBLE_R("Mic1 Capture Switch",
+			  SUN8I_ADDA_LADCMIXSC,
+			  SUN8I_ADDA_RADCMIXSC,
+			  SUN8I_ADDA_LADCMIXSC_MIC1, 1, 0),
 };
 
 /* volume / mute controls */
@@ -292,8 +242,9 @@ static const struct snd_soc_dapm_widget sun8i_codec_common_widgets[] = {
 	/* Mic input path */
 	SND_SOC_DAPM_PGA("Mic1 Amplifier", SUN8I_ADDA_MIC1G_MICBIAS_CTRL,
 			 SUN8I_ADDA_MIC1G_MICBIAS_CTRL_MIC1AMPEN, 0, NULL, 0),
+};
 
-	/* Mixers */
+static const struct snd_soc_dapm_widget sun8i_codec_mixer_widgets[] = {
 	SND_SOC_DAPM_MIXER("Left Mixer", SUN8I_ADDA_DAC_PA_SRC,
 			   SUN8I_ADDA_DAC_PA_SRC_LMIXEN, 0,
 			   sun8i_codec_mixer_controls,
@@ -312,10 +263,31 @@ static const struct snd_soc_dapm_widget sun8i_codec_common_widgets[] = {
 			   ARRAY_SIZE(sun8i_codec_adc_mixer_controls)),
 };
 
+static const struct snd_soc_dapm_widget sun8i_v3s_codec_mixer_widgets[] = {
+	SND_SOC_DAPM_MIXER("Left Mixer", SUN8I_ADDA_DAC_PA_SRC,
+			   SUN8I_ADDA_DAC_PA_SRC_LMIXEN, 0,
+			   sun8i_v3s_codec_mixer_controls,
+			   ARRAY_SIZE(sun8i_v3s_codec_mixer_controls)),
+	SND_SOC_DAPM_MIXER("Right Mixer", SUN8I_ADDA_DAC_PA_SRC,
+			   SUN8I_ADDA_DAC_PA_SRC_RMIXEN, 0,
+			   sun8i_v3s_codec_mixer_controls,
+			   ARRAY_SIZE(sun8i_v3s_codec_mixer_controls)),
+	SND_SOC_DAPM_MIXER("Left ADC Mixer", SUN8I_ADDA_ADC_AP_EN,
+			   SUN8I_ADDA_ADC_AP_EN_ADCLEN, 0,
+			   sun8i_v3s_codec_adc_mixer_controls,
+			   ARRAY_SIZE(sun8i_v3s_codec_adc_mixer_controls)),
+	SND_SOC_DAPM_MIXER("Right ADC Mixer", SUN8I_ADDA_ADC_AP_EN,
+			   SUN8I_ADDA_ADC_AP_EN_ADCREN, 0,
+			   sun8i_v3s_codec_adc_mixer_controls,
+			   ARRAY_SIZE(sun8i_v3s_codec_adc_mixer_controls)),
+};
+
 static const struct snd_soc_dapm_route sun8i_codec_common_routes[] = {
 	/* Microphone Routes */
 	{ "Mic1 Amplifier", NULL, "MIC1"},
+};
 
+static const struct snd_soc_dapm_route sun8i_codec_mixer_routes[] = {
 	/* Left Mixer Routes */
 	{ "Left Mixer", "DAC Playback Switch", "Left DAC" },
 	{ "Left Mixer", "DAC Reversed Playback Switch", "Right DAC" },
@@ -369,11 +341,37 @@ static const struct snd_kcontrol_new sun8i_codec_hp_src[] = {
 		      sun8i_codec_hp_src_enum),
 };
 
+static int sun8i_headphone_amp_event(struct snd_soc_dapm_widget *w,
+				     struct snd_kcontrol *k, int event)
+{
+	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
+
+	if (SND_SOC_DAPM_EVENT_ON(event)) {
+		snd_soc_component_update_bits(component, SUN8I_ADDA_PAEN_HP_CTRL,
+					      BIT(SUN8I_ADDA_PAEN_HP_CTRL_HPPAEN),
+					      BIT(SUN8I_ADDA_PAEN_HP_CTRL_HPPAEN));
+		/*
+		 * Need a delay to have the amplifier up. 700ms seems the best
+		 * compromise between the time to let the amplifier up and the
+		 * time not to feel this delay while playing a sound.
+		 */
+		msleep(700);
+	} else if (SND_SOC_DAPM_EVENT_OFF(event)) {
+		snd_soc_component_update_bits(component, SUN8I_ADDA_PAEN_HP_CTRL,
+					      BIT(SUN8I_ADDA_PAEN_HP_CTRL_HPPAEN),
+					      0x0);
+	}
+
+	return 0;
+}
+
 static const struct snd_soc_dapm_widget sun8i_codec_headphone_widgets[] = {
 	SND_SOC_DAPM_MUX("Headphone Source Playback Route",
 			 SND_SOC_NOPM, 0, 0, sun8i_codec_hp_src),
-	SND_SOC_DAPM_OUT_DRV("Headphone Amp", SUN8I_ADDA_PAEN_HP_CTRL,
-			     SUN8I_ADDA_PAEN_HP_CTRL_HPPAEN, 0, NULL, 0),
+	SND_SOC_DAPM_OUT_DRV_E("Headphone Amp", SUN8I_ADDA_PAEN_HP_CTRL,
+			       SUN8I_ADDA_PAEN_HP_CTRL_HPPAEN, 0, NULL, 0,
+			       sun8i_headphone_amp_event,
+			       SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_PRE_PMD),
 	SND_SOC_DAPM_SUPPLY("HPCOM Protection", SUN8I_ADDA_PAEN_HP_CTRL,
 			    SUN8I_ADDA_PAEN_HP_CTRL_COMPTEN, 0, NULL, 0),
 	SND_SOC_DAPM_REG(snd_soc_dapm_supply, "HPCOM", SUN8I_ADDA_PAEN_HP_CTRL,
@@ -688,6 +686,48 @@ static const struct sun8i_codec_analog_quirks sun8i_h3_quirks = {
 	.has_mic2	= true,
 };
 
+static int sun8i_codec_analog_add_mixer(struct snd_soc_component *cmpnt,
+					const struct sun8i_codec_analog_quirks *quirks)
+{
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(cmpnt);
+	struct device *dev = cmpnt->dev;
+	int ret;
+
+	if (!quirks->has_mic2 && !quirks->has_linein) {
+		/*
+		 * Apply the special widget set which has uses a control
+		 * without MIC2 and Line In, for SoCs without these.
+		 * TODO: not all special cases are supported now, this case
+		 * is present because it's the case of V3s.
+		 */
+		ret = snd_soc_dapm_new_controls(dapm,
+						sun8i_v3s_codec_mixer_widgets,
+						ARRAY_SIZE(sun8i_v3s_codec_mixer_widgets));
+		if (ret) {
+			dev_err(dev, "Failed to add V3s Mixer DAPM widgets: %d\n", ret);
+			return ret;
+		}
+	} else {
+		/* Apply the generic mixer widget set. */
+		ret = snd_soc_dapm_new_controls(dapm,
+						sun8i_codec_mixer_widgets,
+						ARRAY_SIZE(sun8i_codec_mixer_widgets));
+		if (ret) {
+			dev_err(dev, "Failed to add Mixer DAPM widgets: %d\n", ret);
+			return ret;
+		}
+	}
+
+	ret = snd_soc_dapm_add_routes(dapm, sun8i_codec_mixer_routes,
+				      ARRAY_SIZE(sun8i_codec_mixer_routes));
+	if (ret) {
+		dev_err(dev, "Failed to add Mixer DAPM routes: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static const struct sun8i_codec_analog_quirks sun8i_v3s_quirks = {
 	.has_headphone	= true,
 	.has_hmic	= true,
@@ -707,6 +747,9 @@ static int sun8i_codec_analog_cmpnt_probe(struct snd_soc_component *cmpnt)
 	quirks = of_device_get_match_data(dev);
 
 	/* Add controls, widgets, and routes for individual features */
+	ret = sun8i_codec_analog_add_mixer(cmpnt, quirks);
+	if (ret)
+		return ret;
 
 	if (quirks->has_headphone) {
 		ret = sun8i_codec_add_headphone(cmpnt);
@@ -787,7 +830,7 @@ static int sun8i_codec_analog_probe(struct platform_device *pdev)
 		return PTR_ERR(base);
 	}
 
-	regmap = devm_regmap_init(&pdev->dev, NULL, base, &adda_pr_regmap_cfg);
+	regmap = sun8i_adda_pr_regmap_init(&pdev->dev, base);
 	if (IS_ERR(regmap)) {
 		dev_err(&pdev->dev, "Failed to create regmap\n");
 		return PTR_ERR(regmap);

@@ -53,7 +53,9 @@ enum {
 	OCTEON_ORDERED_LIST = 0,
 	OCTEON_UNORDERED_NONBLOCKING_LIST = 1,
 	OCTEON_UNORDERED_BLOCKING_LIST = 2,
-	OCTEON_ORDERED_SC_LIST = 3
+	OCTEON_ORDERED_SC_LIST = 3,
+	OCTEON_DONE_SC_LIST = 4,
+	OCTEON_ZOMBIE_SC_LIST = 5
 };
 
 /** Response Order values for a Octeon Request. */
@@ -78,6 +80,8 @@ enum {
 
 /*------------   Error codes used by host driver   -----------------*/
 #define DRIVER_MAJOR_ERROR_CODE           0x0000
+/*------   Error codes used by firmware (bits 15..0 set by firmware */
+#define FIRMWARE_MAJOR_ERROR_CODE         0x0001
 
 /**  A value of 0x00000000 indicates no error i.e. success */
 #define DRIVER_ERROR_NONE                 0x00000000
@@ -115,6 +119,9 @@ enum {
 	OCTEON_REQUEST_NO_IQ_SPACE = (0x7FFFFFFF)
 
 };
+
+#define FIRMWARE_STATUS_CODE(status) \
+	((FIRMWARE_MAJOR_ERROR_CODE << 16) | (status))
 
 /** Initialize the response lists. The number of response lists to create is
  * given by count.

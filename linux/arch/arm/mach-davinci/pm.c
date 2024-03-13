@@ -1,11 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * DaVinci Power Management Routines
  *
  * Copyright (C) 2009 Texas Instruments, Inc. http://www.ti.com/
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/pm.h>
@@ -108,7 +105,6 @@ static int davinci_pm_enter(suspend_state_t state)
 	int ret = 0;
 
 	switch (state) {
-	case PM_SUSPEND_STANDBY:
 	case PM_SUSPEND_MEM:
 		davinci_pm_suspend();
 		break;
@@ -154,7 +150,8 @@ int __init davinci_pm_init(void)
 	davinci_sram_suspend = sram_alloc(davinci_cpu_suspend_sz, NULL);
 	if (!davinci_sram_suspend) {
 		pr_err("PM: cannot allocate SRAM memory\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto no_sram_mem;
 	}
 
 	davinci_sram_push(davinci_sram_suspend, davinci_cpu_suspend,
@@ -162,6 +159,10 @@ int __init davinci_pm_init(void)
 
 	suspend_set_ops(&davinci_pm_ops);
 
+	return 0;
+
+no_sram_mem:
+	iounmap(pm_config.ddrpsc_reg_base);
 no_ddrpsc_mem:
 	iounmap(pm_config.ddrpll_reg_base);
 no_ddrpll_mem:

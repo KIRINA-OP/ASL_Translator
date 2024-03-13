@@ -38,13 +38,10 @@ int lio_cn6xxx_soft_reset(struct octeon_device *oct)
 	lio_pci_readq(oct, CN6XXX_CIU_SOFT_RST);
 	lio_pci_writeq(oct, 1, CN6XXX_CIU_SOFT_RST);
 
-	/* make sure that the reset is written before starting timer */
-	mmiowb();
-
 	/* Wait for 10ms as Octeon resets. */
 	mdelay(100);
 
-	if (octeon_read_csr64(oct, CN6XXX_SLI_SCRATCH1) == 0x1234ULL) {
+	if (octeon_read_csr64(oct, CN6XXX_SLI_SCRATCH1)) {
 		dev_err(&oct->pci_dev->dev, "Soft reset failed\n");
 		return 1;
 	}
@@ -209,9 +206,6 @@ void lio_cn6xxx_setup_global_output_regs(struct octeon_device *oct)
 		octeon_write_csr64(oct, CN6XXX_SLI_OQ_WMARK, 0);
 	}
 
-	/* / Select Info Ptr for length & data */
-	octeon_write_csr(oct, CN6XXX_SLI_PKT_IPTR, 0xFFFFFFFF);
-
 	/* / Select Packet count instead of bytes for SLI_PKTi_CNTS[CNT] */
 	octeon_write_csr(oct, CN6XXX_SLI_PKT_OUT_BMODE, 0);
 
@@ -314,7 +308,7 @@ void lio_cn6xxx_setup_oq_regs(struct octeon_device *oct, u32 oq_no)
 	octeon_write_csr(oct, CN6XXX_SLI_OQ_SIZE(oq_no), droq->max_count);
 
 	octeon_write_csr(oct, CN6XXX_SLI_OQ_BUFF_INFO_SIZE(oq_no),
-			 (droq->buffer_size | (OCT_RH_SIZE << 16)));
+			 droq->buffer_size);
 
 	/* Get the mapped address of the pkt_sent and pkts_credit regs */
 	droq->pkts_sent_reg =
@@ -490,9 +484,6 @@ void lio_cn6xxx_disable_interrupt(struct octeon_device *oct,
 
 	/* Disable Interrupts */
 	writeq(0, cn6xxx->intr_enb_reg64);
-
-	/* make sure interrupts are really disabled */
-	mmiowb();
 }
 
 static void lio_cn6xxx_get_pcie_qlmport(struct octeon_device *oct)
@@ -557,10 +548,6 @@ static int lio_cn6xxx_process_droq_intr_regs(struct octeon_device *oct)
 				value = octeon_read_csr(oct, reg);
 				value &= ~(1 << oq_no);
 				octeon_write_csr(oct, reg, value);
-
-				/* Ensure that the enable register is written.
-				 */
-				mmiowb();
 
 				spin_unlock(&cn6xxx->lock_for_droq_int_enb_reg);
 			}
@@ -734,8 +721,7 @@ int lio_validate_cn6xxx_config_info(struct octeon_device *oct,
 			__func__);
 		return 1;
 	}
-	if (!(CFG_GET_OQ_INFO_PTR(conf6xxx)) ||
-	    !(CFG_GET_OQ_REFILL_THRESHOLD(conf6xxx))) {
+	if (!CFG_GET_OQ_REFILL_THRESHOLD(conf6xxx)) {
 		dev_err(&oct->pci_dev->dev, "%s: Invalid parameter for OQ\n",
 			__func__);
 		return 1;

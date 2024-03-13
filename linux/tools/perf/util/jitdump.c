@@ -1,5 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <sys/sysmacros.h>
 #include <sys/types.h>
+#include <errno.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,13 +12,13 @@
 #include <byteswap.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <linux/stringify.h>
 
 #include "util.h"
 #include "event.h"
 #include "debug.h"
 #include "evlist.h"
 #include "symbol.h"
-#include "strlist.h"
 #include <elf.h>
 
 #include "tsc.h"
@@ -25,8 +28,11 @@
 #include "genelf.h"
 #include "../builtin.h"
 
+#include <linux/ctype.h>
+#include <linux/zalloc.h>
+
 struct jit_buf_desc {
-	struct perf_data_file *output;
+	struct perf_data *output;
 	struct perf_session *session;
 	struct machine *machine;
 	union jr_entry   *entry;
@@ -34,7 +40,7 @@ struct jit_buf_desc {
 	uint64_t	 sample_type;
 	size_t           bufsize;
 	FILE             *in;
-	bool		 needs_bswap; /* handles cross-endianess */
+	bool		 needs_bswap; /* handles cross-endianness */
 	bool		 use_arch_timestamp;
 	void		 *debug_data;
 	void		 *unwinding_data;
@@ -57,8 +63,8 @@ struct debug_line_info {
 
 struct jit_tool {
 	struct perf_tool tool;
-	struct perf_data_file	output;
-	struct perf_data_file	input;
+	struct perf_data	output;
+	struct perf_data	input;
 	u64 bytes_written;
 };
 
@@ -181,7 +187,7 @@ jit_open(struct jit_buf_desc *jd, const char *name)
 			jd->use_arch_timestamp);
 
 	if (header.version > JITHEADER_VERSION) {
-		pr_err("wrong jitdump version %u, expected " STR(JITHEADER_VERSION),
+		pr_err("wrong jitdump version %u, expected " __stringify(JITHEADER_VERSION),
 			header.version);
 		goto error;
 	}
@@ -353,7 +359,7 @@ jit_inject_event(struct jit_buf_desc *jd, union perf_event *event)
 {
 	ssize_t size;
 
-	size = perf_data_file__write(jd->output, event, event->header.size);
+	size = perf_data__write(jd->output, event, event->header.size);
 	if (size < 0)
 		return -1;
 
@@ -426,14 +432,12 @@ static int jit_repipe_code_load(struct jit_buf_desc *jd, union jr_entry *jr)
 			   jd->unwinding_data, jd->eh_frame_hdr_size, jd->unwinding_size);
 
 	if (jd->debug_data && jd->nr_debug_entries) {
-		free(jd->debug_data);
-		jd->debug_data = NULL;
+		zfree(&jd->debug_data);
 		jd->nr_debug_entries = 0;
 	}
 
 	if (jd->unwinding_data && jd->eh_frame_hdr_size) {
-		free(jd->unwinding_data);
-		jd->unwinding_data = NULL;
+		zfree(&jd->unwinding_data);
 		jd->eh_frame_hdr_size = 0;
 		jd->unwinding_mapped_size = 0;
 		jd->unwinding_size = 0;
@@ -748,7 +752,7 @@ jit_detect(char *mmap_name, pid_t pid)
 
 int
 jit_process(struct perf_session *session,
-	    struct perf_data_file *output,
+	    struct perf_data *output,
 	    struct machine *machine,
 	    char *filename,
 	    pid_t pid,

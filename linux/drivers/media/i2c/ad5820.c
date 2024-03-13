@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * drivers/media/i2c/ad5820.c
  *
@@ -11,15 +12,6 @@
  *	    Sakari Ailus <sakari.ailus@iki.fi>
  *
  * Based on af_d88.c by Texas Instruments.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
  */
 
 #include <linux/errno.h>
@@ -317,7 +309,7 @@ static int ad5820_probe(struct i2c_client *client,
 	v4l2_i2c_subdev_init(&coil->subdev, client, &ad5820_ops);
 	coil->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	coil->subdev.internal_ops = &ad5820_internal_ops;
-	strcpy(coil->subdev.name, "ad5820 focus");
+	strscpy(coil->subdev.name, "ad5820 focus", sizeof(coil->subdev.name));
 
 	ret = media_entity_pads_init(&coil->subdev.entity, 0, NULL);
 	if (ret < 0)
@@ -336,12 +328,12 @@ cleanup:
 	return ret;
 }
 
-static int __exit ad5820_remove(struct i2c_client *client)
+static int ad5820_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *subdev = i2c_get_clientdata(client);
 	struct ad5820_device *coil = to_ad5820_device(subdev);
 
-	v4l2_device_unregister_subdev(&coil->subdev);
+	v4l2_async_unregister_subdev(&coil->subdev);
 	v4l2_ctrl_handler_free(&coil->ctrls);
 	media_entity_cleanup(&coil->subdev.entity);
 	mutex_destroy(&coil->power_lock);
@@ -362,7 +354,7 @@ static struct i2c_driver ad5820_i2c_driver = {
 		.pm	= &ad5820_pm,
 	},
 	.probe		= ad5820_probe,
-	.remove		= __exit_p(ad5820_remove),
+	.remove		= ad5820_remove,
 	.id_table	= ad5820_id_table,
 };
 

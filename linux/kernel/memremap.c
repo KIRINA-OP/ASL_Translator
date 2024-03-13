@@ -1,359 +1,267 @@
-/*
- * Copyright(c) 2015 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of version 2 of the GNU General Public License as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- */
-#include <linux/radix-tree.h>
-#include <linux/memremap.h>
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright(c) 2015 Intel Corporation. All rights reserved. */
 #include <linux/device.h>
-#include <linux/types.h>
-#include <linux/pfn_t.h>
 #include <linux/io.h>
-#include <linux/mm.h>
+#include <linux/kasan.h>
 #include <linux/memory_hotplug.h>
+#include <linux/mm.h>
+#include <linux/pfn_t.h>
+#include <linux/swap.h>
+#include <linux/swapops.h>
+#include <linux/types.h>
+#include <linux/wait_bit.h>
+#include <linux/xarray.h>
 
-#ifndef ioremap_cache
-/* temporary while we convert existing ioremap_cache users to memremap */
-__weak void __iomem *ioremap_cache(resource_size_t offset, unsigned long size)
-{
-	return ioremap(offset, size);
-}
-#endif
-
-#ifndef arch_memremap_wb
-static void *arch_memremap_wb(resource_size_t offset, unsigned long size)
-{
-	return (__force void *)ioremap_cache(offset, size);
-}
-#endif
-
-static void *try_ram_remap(resource_size_t offset, size_t size)
-{
-	unsigned long pfn = PHYS_PFN(offset);
-
-	/* In the simple case just return the existing linear address */
-	if (pfn_valid(pfn) && !PageHighMem(pfn_to_page(pfn)))
-		return __va(offset);
-	return NULL; /* fallback to arch_memremap_wb */
-}
-
-/**
- * memremap() - remap an iomem_resource as cacheable memory
- * @offset: iomem resource start address
- * @size: size of remap
- * @flags: any of MEMREMAP_WB, MEMREMAP_WT and MEMREMAP_WC
- *
- * memremap() is "ioremap" for cases where it is known that the resource
- * being mapped does not have i/o side effects and the __iomem
- * annotation is not applicable. In the case of multiple flags, the different
- * mapping types will be attempted in the order listed below until one of
- * them succeeds.
- *
- * MEMREMAP_WB - matches the default mapping for System RAM on
- * the architecture.  This is usually a read-allocate write-back cache.
- * Morever, if MEMREMAP_WB is specified and the requested remap region is RAM
- * memremap() will bypass establishing a new mapping and instead return
- * a pointer into the direct map.
- *
- * MEMREMAP_WT - establish a mapping whereby writes either bypass the
- * cache or are written through to memory and never exist in a
- * cache-dirty state with respect to program visibility.  Attempts to
- * map System RAM with this mapping type will fail.
- *
- * MEMREMAP_WC - establish a writecombine mapping, whereby writes may
- * be coalesced together (e.g. in the CPU's write buffers), but is otherwise
- * uncached. Attempts to map System RAM with this mapping type will fail.
- */
-void *memremap(resource_size_t offset, size_t size, unsigned long flags)
-{
-	int is_ram = region_intersects(offset, size,
-				       IORESOURCE_SYSTEM_RAM, IORES_DESC_NONE);
-	void *addr = NULL;
-
-	if (!flags)
-		return NULL;
-
-	if (is_ram == REGION_MIXED) {
-		WARN_ONCE(1, "memremap attempted on mixed range %pa size: %#lx\n",
-				&offset, (unsigned long) size);
-		return NULL;
-	}
-
-	/* Try all mapping types requested until one returns non-NULL */
-	if (flags & MEMREMAP_WB) {
-		/*
-		 * MEMREMAP_WB is special in that it can be satisifed
-		 * from the direct map.  Some archs depend on the
-		 * capability of memremap() to autodetect cases where
-		 * the requested range is potentially in System RAM.
-		 */
-		if (is_ram == REGION_INTERSECTS)
-			addr = try_ram_remap(offset, size);
-		if (!addr)
-			addr = arch_memremap_wb(offset, size);
-	}
-
-	/*
-	 * If we don't have a mapping yet and other request flags are
-	 * present then we will be attempting to establish a new virtual
-	 * address mapping.  Enforce that this mapping is not aliasing
-	 * System RAM.
-	 */
-	if (!addr && is_ram == REGION_INTERSECTS && flags != MEMREMAP_WB) {
-		WARN_ONCE(1, "memremap attempted on ram %pa size: %#lx\n",
-				&offset, (unsigned long) size);
-		return NULL;
-	}
-
-	if (!addr && (flags & MEMREMAP_WT))
-		addr = ioremap_wt(offset, size);
-
-	if (!addr && (flags & MEMREMAP_WC))
-		addr = ioremap_wc(offset, size);
-
-	return addr;
-}
-EXPORT_SYMBOL(memremap);
-
-void memunmap(void *addr)
-{
-	if (is_vmalloc_addr(addr))
-		iounmap((void __iomem *) addr);
-}
-EXPORT_SYMBOL(memunmap);
-
-static void devm_memremap_release(struct device *dev, void *res)
-{
-	memunmap(*(void **)res);
-}
-
-static int devm_memremap_match(struct device *dev, void *res, void *match_data)
-{
-	return *(void **)res == match_data;
-}
-
-void *devm_memremap(struct device *dev, resource_size_t offset,
-		size_t size, unsigned long flags)
-{
-	void **ptr, *addr;
-
-	ptr = devres_alloc_node(devm_memremap_release, sizeof(*ptr), GFP_KERNEL,
-			dev_to_node(dev));
-	if (!ptr)
-		return ERR_PTR(-ENOMEM);
-
-	addr = memremap(offset, size, flags);
-	if (addr) {
-		*ptr = addr;
-		devres_add(dev, ptr);
-	} else {
-		devres_free(ptr);
-		return ERR_PTR(-ENXIO);
-	}
-
-	return addr;
-}
-EXPORT_SYMBOL(devm_memremap);
-
-void devm_memunmap(struct device *dev, void *addr)
-{
-	WARN_ON(devres_release(dev, devm_memremap_release,
-				devm_memremap_match, addr));
-}
-EXPORT_SYMBOL(devm_memunmap);
-
-#ifdef CONFIG_ZONE_DEVICE
-static DEFINE_MUTEX(pgmap_lock);
-static RADIX_TREE(pgmap_radix, GFP_KERNEL);
+static DEFINE_XARRAY(pgmap_array);
 #define SECTION_MASK ~((1UL << PA_SECTION_SHIFT) - 1)
 #define SECTION_SIZE (1UL << PA_SECTION_SHIFT)
 
-struct page_map {
-	struct resource res;
-	struct percpu_ref *ref;
-	struct dev_pagemap pgmap;
-	struct vmem_altmap altmap;
-};
+#ifdef CONFIG_DEV_PAGEMAP_OPS
+DEFINE_STATIC_KEY_FALSE(devmap_managed_key);
+EXPORT_SYMBOL(devmap_managed_key);
+static atomic_t devmap_managed_enable;
 
-void get_zone_device_page(struct page *page)
+static void devmap_managed_enable_put(void *data)
 {
-	percpu_ref_get(page->pgmap->ref);
-}
-EXPORT_SYMBOL(get_zone_device_page);
-
-void put_zone_device_page(struct page *page)
-{
-	put_dev_pagemap(page->pgmap);
-}
-EXPORT_SYMBOL(put_zone_device_page);
-
-static void pgmap_radix_release(struct resource *res)
-{
-	resource_size_t key, align_start, align_size, align_end;
-
-	align_start = res->start & ~(SECTION_SIZE - 1);
-	align_size = ALIGN(resource_size(res), SECTION_SIZE);
-	align_end = align_start + align_size - 1;
-
-	mutex_lock(&pgmap_lock);
-	for (key = res->start; key <= res->end; key += SECTION_SIZE)
-		radix_tree_delete(&pgmap_radix, key >> PA_SECTION_SHIFT);
-	mutex_unlock(&pgmap_lock);
+	if (atomic_dec_and_test(&devmap_managed_enable))
+		static_branch_disable(&devmap_managed_key);
 }
 
-static unsigned long pfn_first(struct page_map *page_map)
+static int devmap_managed_enable_get(struct device *dev, struct dev_pagemap *pgmap)
 {
-	struct dev_pagemap *pgmap = &page_map->pgmap;
-	const struct resource *res = &page_map->res;
-	struct vmem_altmap *altmap = pgmap->altmap;
-	unsigned long pfn;
+	if (!pgmap->ops || !pgmap->ops->page_free) {
+		WARN(1, "Missing page_free method\n");
+		return -EINVAL;
+	}
 
-	pfn = res->start >> PAGE_SHIFT;
-	if (altmap)
-		pfn += vmem_altmap_offset(altmap);
-	return pfn;
+	if (atomic_inc_return(&devmap_managed_enable) == 1)
+		static_branch_enable(&devmap_managed_key);
+	return devm_add_action_or_reset(dev, devmap_managed_enable_put, NULL);
+}
+#else
+static int devmap_managed_enable_get(struct device *dev, struct dev_pagemap *pgmap)
+{
+	return -EINVAL;
+}
+#endif /* CONFIG_DEV_PAGEMAP_OPS */
+
+static void pgmap_array_delete(struct resource *res)
+{
+	xa_store_range(&pgmap_array, PHYS_PFN(res->start), PHYS_PFN(res->end),
+			NULL, GFP_KERNEL);
+	synchronize_rcu();
 }
 
-static unsigned long pfn_end(struct page_map *page_map)
+static unsigned long pfn_first(struct dev_pagemap *pgmap)
 {
-	const struct resource *res = &page_map->res;
+	return (pgmap->res.start >> PAGE_SHIFT) +
+		vmem_altmap_offset(pgmap_altmap(pgmap));
+}
+
+static unsigned long pfn_end(struct dev_pagemap *pgmap)
+{
+	const struct resource *res = &pgmap->res;
 
 	return (res->start + resource_size(res)) >> PAGE_SHIFT;
 }
 
-#define for_each_device_pfn(pfn, map) \
-	for (pfn = pfn_first(map); pfn < pfn_end(map); pfn++)
-
-static void devm_memremap_pages_release(struct device *dev, void *data)
+static unsigned long pfn_next(unsigned long pfn)
 {
-	struct page_map *page_map = data;
-	struct resource *res = &page_map->res;
-	resource_size_t align_start, align_size;
-	struct dev_pagemap *pgmap = &page_map->pgmap;
+	if (pfn % 1024 == 0)
+		cond_resched();
+	return pfn + 1;
+}
 
-	if (percpu_ref_tryget_live(pgmap->ref)) {
-		dev_WARN(dev, "%s: page mapping is still live!\n", __func__);
-		percpu_ref_put(pgmap->ref);
+#define for_each_device_pfn(pfn, map) \
+	for (pfn = pfn_first(map); pfn < pfn_end(map); pfn = pfn_next(pfn))
+
+static void dev_pagemap_kill(struct dev_pagemap *pgmap)
+{
+	if (pgmap->ops && pgmap->ops->kill)
+		pgmap->ops->kill(pgmap);
+	else
+		percpu_ref_kill(pgmap->ref);
+}
+
+static void dev_pagemap_cleanup(struct dev_pagemap *pgmap)
+{
+	if (pgmap->ops && pgmap->ops->cleanup) {
+		pgmap->ops->cleanup(pgmap);
+	} else {
+		wait_for_completion(&pgmap->done);
+		percpu_ref_exit(pgmap->ref);
 	}
+}
+
+static void devm_memremap_pages_release(void *data)
+{
+	struct dev_pagemap *pgmap = data;
+	struct device *dev = pgmap->dev;
+	struct resource *res = &pgmap->res;
+	resource_size_t align_start, align_size;
+	unsigned long pfn;
+	int nid;
+
+	dev_pagemap_kill(pgmap);
+	for_each_device_pfn(pfn, pgmap)
+		put_page(pfn_to_page(pfn));
+	dev_pagemap_cleanup(pgmap);
 
 	/* pages are dead and unused, undo the arch mapping */
 	align_start = res->start & ~(SECTION_SIZE - 1);
-	align_size = ALIGN(resource_size(res), SECTION_SIZE);
+	align_size = ALIGN(res->start + resource_size(res), SECTION_SIZE)
+		- align_start;
 
-	lock_device_hotplug();
+	nid = page_to_nid(pfn_to_page(align_start >> PAGE_SHIFT));
+
 	mem_hotplug_begin();
-	arch_remove_memory(align_start, align_size);
+	if (pgmap->type == MEMORY_DEVICE_PRIVATE) {
+		pfn = align_start >> PAGE_SHIFT;
+		__remove_pages(page_zone(pfn_to_page(pfn)), pfn,
+				align_size >> PAGE_SHIFT, NULL);
+	} else {
+		arch_remove_memory(nid, align_start, align_size,
+				pgmap_altmap(pgmap));
+		kasan_remove_zero_shadow(__va(align_start), align_size);
+	}
 	mem_hotplug_done();
-	unlock_device_hotplug();
 
 	untrack_pfn(NULL, PHYS_PFN(align_start), align_size);
-	pgmap_radix_release(res);
-	dev_WARN_ONCE(dev, pgmap->altmap && pgmap->altmap->alloc,
-			"%s: failed to free all reserved pages\n", __func__);
+	pgmap_array_delete(res);
+	dev_WARN_ONCE(dev, pgmap->altmap.alloc,
+		      "%s: failed to free all reserved pages\n", __func__);
 }
 
-/* assumes rcu_read_lock() held at entry */
-struct dev_pagemap *find_dev_pagemap(resource_size_t phys)
+static void dev_pagemap_percpu_release(struct percpu_ref *ref)
 {
-	struct page_map *page_map;
+	struct dev_pagemap *pgmap =
+		container_of(ref, struct dev_pagemap, internal_ref);
 
-	WARN_ON_ONCE(!rcu_read_lock_held());
-
-	page_map = radix_tree_lookup(&pgmap_radix, phys >> PA_SECTION_SHIFT);
-	return page_map ? &page_map->pgmap : NULL;
+	complete(&pgmap->done);
 }
 
 /**
  * devm_memremap_pages - remap and provide memmap backing for the given resource
  * @dev: hosting device for @res
- * @res: "host memory" address range
- * @ref: a live per-cpu reference count
- * @altmap: optional descriptor for allocating the memmap from @res
+ * @pgmap: pointer to a struct dev_pagemap
  *
  * Notes:
- * 1/ @ref must be 'live' on entry and 'dead' before devm_memunmap_pages() time
- *    (or devm release event).
+ * 1/ At a minimum the res and type members of @pgmap must be initialized
+ *    by the caller before passing it to this function
  *
- * 2/ @res is expected to be a host memory range that could feasibly be
+ * 2/ The altmap field may optionally be initialized, in which case
+ *    PGMAP_ALTMAP_VALID must be set in pgmap->flags.
+ *
+ * 3/ The ref field may optionally be provided, in which pgmap->ref must be
+ *    'live' on entry and will be killed and reaped at
+ *    devm_memremap_pages_release() time, or if this routine fails.
+ *
+ * 4/ res is expected to be a host memory range that could feasibly be
  *    treated as a "System RAM" range, i.e. not a device mmio range, but
  *    this is not enforced.
  */
-void *devm_memremap_pages(struct device *dev, struct resource *res,
-		struct percpu_ref *ref, struct vmem_altmap *altmap)
+void *devm_memremap_pages(struct device *dev, struct dev_pagemap *pgmap)
 {
-	resource_size_t key, align_start, align_size, align_end;
+	resource_size_t align_start, align_size, align_end;
+	struct resource *res = &pgmap->res;
+	struct dev_pagemap *conflict_pgmap;
+	struct mhp_restrictions restrictions = {
+		/*
+		 * We do not want any optional features only our own memmap
+		*/
+		.altmap = pgmap_altmap(pgmap),
+	};
 	pgprot_t pgprot = PAGE_KERNEL;
-	struct dev_pagemap *pgmap;
-	struct page_map *page_map;
 	int error, nid, is_ram;
-	unsigned long pfn;
+	bool need_devmap_managed = true;
+
+	switch (pgmap->type) {
+	case MEMORY_DEVICE_PRIVATE:
+		if (!IS_ENABLED(CONFIG_DEVICE_PRIVATE)) {
+			WARN(1, "Device private memory not supported\n");
+			return ERR_PTR(-EINVAL);
+		}
+		if (!pgmap->ops || !pgmap->ops->migrate_to_ram) {
+			WARN(1, "Missing migrate_to_ram method\n");
+			return ERR_PTR(-EINVAL);
+		}
+		break;
+	case MEMORY_DEVICE_FS_DAX:
+		if (!IS_ENABLED(CONFIG_ZONE_DEVICE) ||
+		    IS_ENABLED(CONFIG_FS_DAX_LIMITED)) {
+			WARN(1, "File system DAX not supported\n");
+			return ERR_PTR(-EINVAL);
+		}
+		break;
+	case MEMORY_DEVICE_DEVDAX:
+	case MEMORY_DEVICE_PCI_P2PDMA:
+		need_devmap_managed = false;
+		break;
+	default:
+		WARN(1, "Invalid pgmap type %d\n", pgmap->type);
+		break;
+	}
+
+	if (!pgmap->ref) {
+		if (pgmap->ops && (pgmap->ops->kill || pgmap->ops->cleanup))
+			return ERR_PTR(-EINVAL);
+
+		init_completion(&pgmap->done);
+		error = percpu_ref_init(&pgmap->internal_ref,
+				dev_pagemap_percpu_release, 0, GFP_KERNEL);
+		if (error)
+			return ERR_PTR(error);
+		pgmap->ref = &pgmap->internal_ref;
+	} else {
+		if (!pgmap->ops || !pgmap->ops->kill || !pgmap->ops->cleanup) {
+			WARN(1, "Missing reference count teardown definition\n");
+			return ERR_PTR(-EINVAL);
+		}
+	}
+
+	if (need_devmap_managed) {
+		error = devmap_managed_enable_get(dev, pgmap);
+		if (error)
+			return ERR_PTR(error);
+	}
 
 	align_start = res->start & ~(SECTION_SIZE - 1);
 	align_size = ALIGN(res->start + resource_size(res), SECTION_SIZE)
 		- align_start;
+	align_end = align_start + align_size - 1;
+
+	conflict_pgmap = get_dev_pagemap(PHYS_PFN(align_start), NULL);
+	if (conflict_pgmap) {
+		dev_WARN(dev, "Conflicting mapping in same section\n");
+		put_dev_pagemap(conflict_pgmap);
+		error = -ENOMEM;
+		goto err_array;
+	}
+
+	conflict_pgmap = get_dev_pagemap(PHYS_PFN(align_end), NULL);
+	if (conflict_pgmap) {
+		dev_WARN(dev, "Conflicting mapping in same section\n");
+		put_dev_pagemap(conflict_pgmap);
+		error = -ENOMEM;
+		goto err_array;
+	}
+
 	is_ram = region_intersects(align_start, align_size,
 		IORESOURCE_SYSTEM_RAM, IORES_DESC_NONE);
 
-	if (is_ram == REGION_MIXED) {
-		WARN_ONCE(1, "%s attempted on mixed region %pr\n",
-				__func__, res);
-		return ERR_PTR(-ENXIO);
+	if (is_ram != REGION_DISJOINT) {
+		WARN_ONCE(1, "%s attempted on %s region %pr\n", __func__,
+				is_ram == REGION_MIXED ? "mixed" : "ram", res);
+		error = -ENXIO;
+		goto err_array;
 	}
-
-	if (is_ram == REGION_INTERSECTS)
-		return __va(res->start);
-
-	if (!ref)
-		return ERR_PTR(-EINVAL);
-
-	page_map = devres_alloc_node(devm_memremap_pages_release,
-			sizeof(*page_map), GFP_KERNEL, dev_to_node(dev));
-	if (!page_map)
-		return ERR_PTR(-ENOMEM);
-	pgmap = &page_map->pgmap;
-
-	memcpy(&page_map->res, res, sizeof(*res));
 
 	pgmap->dev = dev;
-	if (altmap) {
-		memcpy(&page_map->altmap, altmap, sizeof(*altmap));
-		pgmap->altmap = &page_map->altmap;
-	}
-	pgmap->ref = ref;
-	pgmap->res = &page_map->res;
 
-	mutex_lock(&pgmap_lock);
-	error = 0;
-	align_end = align_start + align_size - 1;
-	for (key = align_start; key <= align_end; key += SECTION_SIZE) {
-		struct dev_pagemap *dup;
-
-		rcu_read_lock();
-		dup = find_dev_pagemap(key);
-		rcu_read_unlock();
-		if (dup) {
-			dev_err(dev, "%s: %pr collides with mapping for %s\n",
-					__func__, res, dev_name(dup->dev));
-			error = -EBUSY;
-			break;
-		}
-		error = radix_tree_insert(&pgmap_radix, key >> PA_SECTION_SHIFT,
-				page_map);
-		if (error) {
-			dev_err(dev, "%s: failed: %d\n", __func__, error);
-			break;
-		}
-	}
-	mutex_unlock(&pgmap_lock);
+	error = xa_err(xa_store_range(&pgmap_array, PHYS_PFN(res->start),
+				PHYS_PFN(res->end), pgmap, GFP_KERNEL));
 	if (error)
-		goto err_radix;
+		goto err_array;
 
 	nid = dev_to_node(dev);
 	if (nid < 0)
@@ -364,43 +272,86 @@ void *devm_memremap_pages(struct device *dev, struct resource *res,
 	if (error)
 		goto err_pfn_remap;
 
-	lock_device_hotplug();
 	mem_hotplug_begin();
-	error = arch_add_memory(nid, align_start, align_size, true);
+
+	/*
+	 * For device private memory we call add_pages() as we only need to
+	 * allocate and initialize struct page for the device memory. More-
+	 * over the device memory is un-accessible thus we do not want to
+	 * create a linear mapping for the memory like arch_add_memory()
+	 * would do.
+	 *
+	 * For all other device memory types, which are accessible by
+	 * the CPU, we do want the linear mapping and thus use
+	 * arch_add_memory().
+	 */
+	if (pgmap->type == MEMORY_DEVICE_PRIVATE) {
+		error = add_pages(nid, align_start >> PAGE_SHIFT,
+				align_size >> PAGE_SHIFT, &restrictions);
+	} else {
+		error = kasan_add_zero_shadow(__va(align_start), align_size);
+		if (error) {
+			mem_hotplug_done();
+			goto err_kasan;
+		}
+
+		error = arch_add_memory(nid, align_start, align_size,
+					&restrictions);
+	}
+
+	if (!error) {
+		struct zone *zone;
+
+		zone = &NODE_DATA(nid)->node_zones[ZONE_DEVICE];
+		move_pfn_range_to_zone(zone, align_start >> PAGE_SHIFT,
+				align_size >> PAGE_SHIFT, pgmap_altmap(pgmap));
+	}
+
 	mem_hotplug_done();
-	unlock_device_hotplug();
 	if (error)
 		goto err_add_memory;
 
-	for_each_device_pfn(pfn, page_map) {
-		struct page *page = pfn_to_page(pfn);
+	/*
+	 * Initialization of the pages has been deferred until now in order
+	 * to allow us to do the work while not holding the hotplug lock.
+	 */
+	memmap_init_zone_device(&NODE_DATA(nid)->node_zones[ZONE_DEVICE],
+				align_start >> PAGE_SHIFT,
+				align_size >> PAGE_SHIFT, pgmap);
+	percpu_ref_get_many(pgmap->ref, pfn_end(pgmap) - pfn_first(pgmap));
 
-		/*
-		 * ZONE_DEVICE pages union ->lru with a ->pgmap back
-		 * pointer.  It is a bug if a ZONE_DEVICE page is ever
-		 * freed or placed on a driver-private list.  Seed the
-		 * storage with LIST_POISON* values.
-		 */
-		list_del(&page->lru);
-		page->pgmap = pgmap;
-	}
-	devres_add(dev, page_map);
+	error = devm_add_action_or_reset(dev, devm_memremap_pages_release,
+			pgmap);
+	if (error)
+		return ERR_PTR(error);
+
 	return __va(res->start);
 
  err_add_memory:
+	kasan_remove_zero_shadow(__va(align_start), align_size);
+ err_kasan:
 	untrack_pfn(NULL, PHYS_PFN(align_start), align_size);
  err_pfn_remap:
- err_radix:
-	pgmap_radix_release(res);
-	devres_free(page_map);
+	pgmap_array_delete(res);
+ err_array:
+	dev_pagemap_kill(pgmap);
+	dev_pagemap_cleanup(pgmap);
 	return ERR_PTR(error);
 }
-EXPORT_SYMBOL(devm_memremap_pages);
+EXPORT_SYMBOL_GPL(devm_memremap_pages);
+
+void devm_memunmap_pages(struct device *dev, struct dev_pagemap *pgmap)
+{
+	devm_release_action(dev, devm_memremap_pages_release, pgmap);
+}
+EXPORT_SYMBOL_GPL(devm_memunmap_pages);
 
 unsigned long vmem_altmap_offset(struct vmem_altmap *altmap)
 {
 	/* number of pfns from base where pfn_to_page() is valid */
-	return altmap->reserve + altmap->free;
+	if (altmap)
+		return altmap->reserve + altmap->free;
+	return 0;
 }
 
 void vmem_altmap_free(struct vmem_altmap *altmap, unsigned long nr_pfns)
@@ -408,29 +359,58 @@ void vmem_altmap_free(struct vmem_altmap *altmap, unsigned long nr_pfns)
 	altmap->alloc -= nr_pfns;
 }
 
-struct vmem_altmap *to_vmem_altmap(unsigned long memmap_start)
+/**
+ * get_dev_pagemap() - take a new live reference on the dev_pagemap for @pfn
+ * @pfn: page frame number to lookup page_map
+ * @pgmap: optional known pgmap that already has a reference
+ *
+ * If @pgmap is non-NULL and covers @pfn it will be returned as-is.  If @pgmap
+ * is non-NULL but does not cover @pfn the reference to it will be released.
+ */
+struct dev_pagemap *get_dev_pagemap(unsigned long pfn,
+		struct dev_pagemap *pgmap)
 {
-	/*
-	 * 'memmap_start' is the virtual address for the first "struct
-	 * page" in this range of the vmemmap array.  In the case of
-	 * CONFIG_SPARSEMEM_VMEMMAP a page_to_pfn conversion is simple
-	 * pointer arithmetic, so we can perform this to_vmem_altmap()
-	 * conversion without concern for the initialization state of
-	 * the struct page fields.
-	 */
-	struct page *page = (struct page *) memmap_start;
-	struct dev_pagemap *pgmap;
+	resource_size_t phys = PFN_PHYS(pfn);
 
 	/*
-	 * Unconditionally retrieve a dev_pagemap associated with the
-	 * given physical address, this is only for use in the
-	 * arch_{add|remove}_memory() for setting up and tearing down
-	 * the memmap.
+	 * In the cached case we're already holding a live reference.
 	 */
+	if (pgmap) {
+		if (phys >= pgmap->res.start && phys <= pgmap->res.end)
+			return pgmap;
+		put_dev_pagemap(pgmap);
+	}
+
+	/* fall back to slow path lookup */
 	rcu_read_lock();
-	pgmap = find_dev_pagemap(__pfn_to_phys(page_to_pfn(page)));
+	pgmap = xa_load(&pgmap_array, PHYS_PFN(phys));
+	if (pgmap && !percpu_ref_tryget_live(pgmap->ref))
+		pgmap = NULL;
 	rcu_read_unlock();
 
-	return pgmap ? pgmap->altmap : NULL;
+	return pgmap;
 }
-#endif /* CONFIG_ZONE_DEVICE */
+EXPORT_SYMBOL_GPL(get_dev_pagemap);
+
+#ifdef CONFIG_DEV_PAGEMAP_OPS
+void __put_devmap_managed_page(struct page *page)
+{
+	int count = page_ref_dec_return(page);
+
+	/*
+	 * If refcount is 1 then page is freed and refcount is stable as nobody
+	 * holds a reference on the page.
+	 */
+	if (count == 1) {
+		/* Clear Active bit in case of parallel mark_page_accessed */
+		__ClearPageActive(page);
+		__ClearPageWaiters(page);
+
+		mem_cgroup_uncharge(page);
+
+		page->pgmap->ops->page_free(page);
+	} else if (!count)
+		__put_page(page);
+}
+EXPORT_SYMBOL(__put_devmap_managed_page);
+#endif /* CONFIG_DEV_PAGEMAP_OPS */

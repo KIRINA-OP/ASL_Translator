@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Device tree integration for the pin control subsystem
  *
  * Copyright (C) 2012 NVIDIA CORPORATION. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/device.h>
@@ -42,7 +31,8 @@ static void dt_free_map(struct pinctrl_dev *pctldev,
 {
 	if (pctldev) {
 		const struct pinctrl_ops *ops = pctldev->desc->pctlops;
-		ops->dt_free_map(pctldev, map, num_maps);
+		if (ops->dt_free_map)
+			ops->dt_free_map(pctldev, map, num_maps);
 	} else {
 		/* There is no pctldev for PIN_MAP_TYPE_DUMMY_STATE */
 		kfree(map);
@@ -82,7 +72,6 @@ static int dt_remember_or_free_map(struct pinctrl *p, const char *statename,
 	/* Remember the converted mapping table entries */
 	dt_map = kzalloc(sizeof(*dt_map), GFP_KERNEL);
 	if (!dt_map) {
-		dev_err(p->dev, "failed to alloc struct pinctrl_dt_map\n");
 		dt_free_map(pctldev, map, num_maps);
 		return -ENOMEM;
 	}
@@ -100,26 +89,39 @@ struct pinctrl_dev *of_pinctrl_get(struct device_node *np)
 	return get_pinctrl_dev_from_of_node(np);
 }
 
-static int dt_to_map_one_config(struct pinctrl *p, const char *statename,
+static int dt_to_map_one_config(struct pinctrl *p,
+				struct pinctrl_dev *hog_pctldev,
+				const char *statename,
 				struct device_node *np_config)
 {
+	struct pinctrl_dev *pctldev = NULL;
 	struct device_node *np_pctldev;
-	struct pinctrl_dev *pctldev;
 	const struct pinctrl_ops *ops;
 	int ret;
 	struct pinctrl_map *map;
 	unsigned num_maps;
+	bool allow_default = false;
 
 	/* Find the pin controller containing np_config */
 	np_pctldev = of_node_get(np_config);
 	for (;;) {
+		if (!allow_default)
+			allow_default = of_property_read_bool(np_pctldev,
+							      "pinctrl-use-default");
+
 		np_pctldev = of_get_next_parent(np_pctldev);
 		if (!np_pctldev || of_node_is_root(np_pctldev)) {
-			dev_info(p->dev, "could not find pctldev for node %s, deferring probe\n",
-				np_config->full_name);
 			of_node_put(np_pctldev);
-			/* OK let's just assume this will appear later then */
-			return -EPROBE_DEFER;
+			/* keep deferring if modules are enabled unless we've timed out */
+			if (IS_ENABLED(CONFIG_MODULES) && !allow_default)
+				return driver_deferred_probe_check_state_continue(p->dev);
+
+			return driver_deferred_probe_check_state(p->dev);
+		}
+		/* If we're creating a hog we can use the passed pctldev */
+		if (hog_pctldev && (np_pctldev == p->dev->of_node)) {
+			pctldev = hog_pctldev;
+			break;
 		}
 		pctldev = get_pinctrl_dev_from_of_node(np_pctldev);
 		if (pctldev)
@@ -155,10 +157,8 @@ static int dt_remember_dummy_state(struct pinctrl *p, const char *statename)
 	struct pinctrl_map *map;
 
 	map = kzalloc(sizeof(*map), GFP_KERNEL);
-	if (!map) {
-		dev_err(p->dev, "failed to alloc struct pinctrl_map\n");
+	if (!map)
 		return -ENOMEM;
-	}
 
 	/* There is no pctldev for PIN_MAP_TYPE_DUMMY_STATE */
 	map->type = PIN_MAP_TYPE_DUMMY_STATE;
@@ -166,7 +166,22 @@ static int dt_remember_dummy_state(struct pinctrl *p, const char *statename)
 	return dt_remember_or_free_map(p, statename, NULL, map, 1);
 }
 
-int pinctrl_dt_to_map(struct pinctrl *p)
+bool pinctrl_dt_has_hogs(struct pinctrl_dev *pctldev)
+{
+	struct device_node *np;
+	struct property *prop;
+	int size;
+
+	np = pctldev->dev->of_node;
+	if (!np)
+		return false;
+
+	prop = of_find_property(np, "pinctrl-0", &size);
+
+	return prop ? true : false;
+}
+
+int pinctrl_dt_to_map(struct pinctrl *p, struct pinctrl_dev *pctldev)
 {
 	struct device_node *np = p->dev->of_node;
 	int state, ret;
@@ -233,7 +248,8 @@ int pinctrl_dt_to_map(struct pinctrl *p)
 			}
 
 			/* Parse the node */
-			ret = dt_to_map_one_config(p, statename, np_config);
+			ret = dt_to_map_one_config(p, pctldev, statename,
+						   np_config);
 			of_node_put(np_config);
 			if (ret < 0)
 				goto err;

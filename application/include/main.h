@@ -1,19 +1,11 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#include <stdio.h>
-#include <iostream>
-#include <stdlib.h>
-#include <pthread.h>
-#include <string>
-#include <stdint.h>
-#include <cstring>
-#include <cstdio>
-
-
-
-
-#define LOCK pthread_mutex_t 
+// #include "visController.h"
+#include <mutex>
+#include "visController.h"
+#include "visIpcMsg.h"
+#include "visControl.h"
 
 //device mode enum
 enum visDeviceMode{
@@ -21,6 +13,8 @@ enum visDeviceMode{
     Main = 1,
     Config = 2
 };
+
+
 void helloworld();
 
 #endif

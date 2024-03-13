@@ -1,10 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012 Russell King
  *  Rewritten from the dovefb driver, and Armada510 manuals.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
@@ -19,13 +16,13 @@ static int armada_debugfs_gem_linear_show(struct seq_file *m, void *data)
 	struct drm_info_node *node = m->private;
 	struct drm_device *dev = node->minor->dev;
 	struct armada_private *priv = dev->dev_private;
-	int ret;
+	struct drm_printer p = drm_seq_file_printer(m);
 
 	mutex_lock(&priv->linear_lock);
-	ret = drm_mm_dump_table(m, &priv->linear);
+	drm_mm_print(&priv->linear, &p);
 	mutex_unlock(&priv->linear_lock);
 
-	return ret;
+	return 0;
 }
 
 static int armada_debugfs_reg_show(struct seq_file *m, void *data)
@@ -107,40 +104,9 @@ static struct drm_info_list armada_debugfs_list[] = {
 };
 #define ARMADA_DEBUGFS_ENTRIES ARRAY_SIZE(armada_debugfs_list)
 
-static int drm_add_fake_info_node(struct drm_minor *minor, struct dentry *ent,
-	const void *key)
-{
-	struct drm_info_node *node;
-
-	node = kmalloc(sizeof(struct drm_info_node), GFP_KERNEL);
-	if (!node) {
-		debugfs_remove(ent);
-		return -ENOMEM;
-	}
-
-	node->minor = minor;
-	node->dent = ent;
-	node->info_ent = (void *) key;
-
-	mutex_lock(&minor->debugfs_lock);
-	list_add(&node->list, &minor->debugfs_list);
-	mutex_unlock(&minor->debugfs_lock);
-
-	return 0;
-}
-
-static int armada_debugfs_create(struct dentry *root, struct drm_minor *minor,
-	const char *name, umode_t mode, const struct file_operations *fops)
-{
-	struct dentry *de;
-
-	de = debugfs_create_file(name, mode, root, minor->dev, fops);
-
-	return drm_add_fake_info_node(minor, de, fops);
-}
-
 int armada_drm_debugfs_init(struct drm_minor *minor)
 {
+	struct dentry *de;
 	int ret;
 
 	ret = drm_debugfs_create_files(armada_debugfs_list,
@@ -149,29 +115,15 @@ int armada_drm_debugfs_init(struct drm_minor *minor)
 	if (ret)
 		return ret;
 
-	ret = armada_debugfs_create(minor->debugfs_root, minor,
-				   "reg", S_IFREG | S_IRUSR, &fops_reg_r);
-	if (ret)
-		goto err_1;
+	de = debugfs_create_file("reg", S_IFREG | S_IRUSR,
+				 minor->debugfs_root, minor->dev, &fops_reg_r);
+	if (!de)
+		return -ENOMEM;
 
-	ret = armada_debugfs_create(minor->debugfs_root, minor,
-				"reg_wr", S_IFREG | S_IWUSR, &fops_reg_w);
-	if (ret)
-		goto err_2;
-	return ret;
+	de = debugfs_create_file("reg_wr", S_IFREG | S_IWUSR,
+				 minor->debugfs_root, minor->dev, &fops_reg_w);
+	if (!de)
+		return -ENOMEM;
 
- err_2:
-	drm_debugfs_remove_files((struct drm_info_list *)&fops_reg_r, 1, minor);
- err_1:
-	drm_debugfs_remove_files(armada_debugfs_list, ARMADA_DEBUGFS_ENTRIES,
-				 minor);
-	return ret;
-}
-
-void armada_drm_debugfs_cleanup(struct drm_minor *minor)
-{
-	drm_debugfs_remove_files((struct drm_info_list *)&fops_reg_w, 1, minor);
-	drm_debugfs_remove_files((struct drm_info_list *)&fops_reg_r, 1, minor);
-	drm_debugfs_remove_files(armada_debugfs_list, ARMADA_DEBUGFS_ENTRIES,
-				 minor);
+	return 0;
 }

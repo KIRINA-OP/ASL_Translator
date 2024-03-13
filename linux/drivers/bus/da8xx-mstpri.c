@@ -1,14 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * TI da8xx master peripheral priority driver
  *
  * Copyright (C) 2016 BayLibre SAS
  *
  * Author:
- *   Bartosz Golaszewski <bgolaszewski@baylibre.com.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ *   Bartosz Golaszewski <bgolaszewski@baylibre.com>
  */
 
 #include <linux/module.h>

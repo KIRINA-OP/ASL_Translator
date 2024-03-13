@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * x86 FPU boot time init code:
  */
@@ -7,6 +8,7 @@
 #include <asm/cmdline.h>
 
 #include <linux/sched.h>
+#include <linux/sched/task.h>
 #include <linux/init.h>
 
 /*
@@ -48,13 +50,7 @@ void fpu__init_cpu(void)
 	fpu__init_cpu_xstate();
 }
 
-/*
- * The earliest FPU detection code.
- *
- * Set the X86_FEATURE_FPU CPU-capability bit based on
- * trying to execute an actual sequence of FPU instructions:
- */
-static void fpu__init_system_early_generic(struct cpuinfo_x86 *c)
+static bool fpu__probe_without_cpuid(void)
 {
 	unsigned long cr0;
 	u16 fsw, fcw;
@@ -65,18 +61,25 @@ static void fpu__init_system_early_generic(struct cpuinfo_x86 *c)
 	cr0 &= ~(X86_CR0_TS | X86_CR0_EM);
 	write_cr0(cr0);
 
-	if (!test_bit(X86_FEATURE_FPU, (unsigned long *)cpu_caps_cleared)) {
-		asm volatile("fninit ; fnstsw %0 ; fnstcw %1"
-			     : "+m" (fsw), "+m" (fcw));
+	asm volatile("fninit ; fnstsw %0 ; fnstcw %1" : "+m" (fsw), "+m" (fcw));
 
-		if (fsw == 0 && (fcw & 0x103f) == 0x003f)
-			set_cpu_cap(c, X86_FEATURE_FPU);
+	pr_info("x86/fpu: Probing for FPU: FSW=0x%04hx FCW=0x%04hx\n", fsw, fcw);
+
+	return fsw == 0 && (fcw & 0x103f) == 0x003f;
+}
+
+static void fpu__init_system_early_generic(struct cpuinfo_x86 *c)
+{
+	if (!boot_cpu_has(X86_FEATURE_CPUID) &&
+	    !test_bit(X86_FEATURE_FPU, (unsigned long *)cpu_caps_cleared)) {
+		if (fpu__probe_without_cpuid())
+			setup_force_cpu_cap(X86_FEATURE_FPU);
 		else
-			clear_cpu_cap(c, X86_FEATURE_FPU);
+			setup_clear_cpu_cap(X86_FEATURE_FPU);
 	}
 
 #ifndef CONFIG_MATH_EMULATION
-	if (!boot_cpu_has(X86_FEATURE_FPU)) {
+	if (!test_cpu_cap(&boot_cpu_data, X86_FEATURE_FPU)) {
 		pr_emerg("x86/fpu: Giving up, no FPU found and no math emulation present\n");
 		for (;;)
 			asm volatile("hlt");
@@ -88,6 +91,7 @@ static void fpu__init_system_early_generic(struct cpuinfo_x86 *c)
  * Boot time FPU feature detection code:
  */
 unsigned int mxcsr_feature_mask __read_mostly = 0xffffffffu;
+EXPORT_SYMBOL_GPL(mxcsr_feature_mask);
 
 static void __init fpu__init_system_mxcsr(void)
 {
@@ -200,12 +204,6 @@ static void __init fpu__init_system_xstate_size_legacy(void)
 	 */
 
 	if (!boot_cpu_has(X86_FEATURE_FPU)) {
-		/*
-		 * Disable xsave as we do not support it if i387
-		 * emulation is enabled.
-		 */
-		setup_clear_cpu_cap(X86_FEATURE_XSAVE);
-		setup_clear_cpu_cap(X86_FEATURE_XSAVEOPT);
 		fpu_kernel_xstate_size = sizeof(struct swregs_state);
 	} else {
 		if (boot_cpu_has(X86_FEATURE_FXSR))
@@ -236,8 +234,6 @@ static void __init fpu__init_system_ctx_switch(void)
 
 	WARN_ON_FPU(!on_boot_cpu);
 	on_boot_cpu = 0;
-
-	WARN_ON_FPU(current->thread.fpu.fpstate_active);
 }
 
 /*
@@ -246,23 +242,37 @@ static void __init fpu__init_system_ctx_switch(void)
  */
 static void __init fpu__init_parse_early_param(void)
 {
-	if (cmdline_find_option_bool(boot_command_line, "no387"))
-		setup_clear_cpu_cap(X86_FEATURE_FPU);
+	char arg[32];
+	char *argptr = arg;
+	int bit;
 
-	if (cmdline_find_option_bool(boot_command_line, "nofxsr")) {
+#ifdef CONFIG_X86_32
+	if (cmdline_find_option_bool(boot_command_line, "no387"))
+#ifdef CONFIG_MATH_EMULATION
+		setup_clear_cpu_cap(X86_FEATURE_FPU);
+#else
+		pr_err("Option 'no387' required CONFIG_MATH_EMULATION enabled.\n");
+#endif
+
+	if (cmdline_find_option_bool(boot_command_line, "nofxsr"))
 		setup_clear_cpu_cap(X86_FEATURE_FXSR);
-		setup_clear_cpu_cap(X86_FEATURE_FXSR_OPT);
-		setup_clear_cpu_cap(X86_FEATURE_XMM);
-	}
+#endif
 
 	if (cmdline_find_option_bool(boot_command_line, "noxsave"))
-		fpu__xstate_clear_all_cpu_caps();
+		setup_clear_cpu_cap(X86_FEATURE_XSAVE);
 
 	if (cmdline_find_option_bool(boot_command_line, "noxsaveopt"))
 		setup_clear_cpu_cap(X86_FEATURE_XSAVEOPT);
 
 	if (cmdline_find_option_bool(boot_command_line, "noxsaves"))
 		setup_clear_cpu_cap(X86_FEATURE_XSAVES);
+
+	if (cmdline_find_option(boot_command_line, "clearcpuid", arg,
+				sizeof(arg)) &&
+	    get_option(&argptr, &bit) &&
+	    bit >= 0 &&
+	    bit < NCAPINTS * 32)
+		setup_clear_cpu_cap(bit);
 }
 
 /*

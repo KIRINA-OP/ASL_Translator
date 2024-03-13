@@ -1,13 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * itmt.c: Support Intel Turbo Boost Max Technology 3.0
  *
  * (C) Copyright 2016 Intel Corporation
  * Author: Tim Chen <tim.c.chen@linux.intel.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; version 2
- * of the License.
  *
  * On platforms supporting Intel Turbo Boost Max Technology 3.0, (ITMT),
  * the maximum turbo frequencies of some cores in a CPU package may be
@@ -24,7 +20,6 @@
 #include <linux/cpumask.h>
 #include <linux/cpuset.h>
 #include <linux/mutex.h>
-#include <linux/sched.h>
 #include <linux/sysctl.h>
 #include <linux/nodemask.h>
 
@@ -132,10 +127,8 @@ int sched_set_itmt_support(void)
 
 	sysctl_sched_itmt_enabled = 1;
 
-	if (sysctl_sched_itmt_enabled) {
-		x86_topology_update = true;
-		rebuild_sched_domains();
-	}
+	x86_topology_update = true;
+	rebuild_sched_domains();
 
 	mutex_unlock(&itmt_update_mutex);
 

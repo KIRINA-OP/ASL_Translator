@@ -1,10 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * QLogic iSCSI Offload Driver
  * Copyright (c) 2016 Cavium Inc.
- *
- * This software is available under the terms of the GNU General Public License
- * (GPL) Version 2, available from the file COPYING in the main directory of
- * this source tree.
  */
 
 #ifndef _QEDI_H_
@@ -23,10 +20,16 @@
 #include <linux/qed/qed_iscsi_if.h>
 #include <linux/qed/qed_ll2_if.h>
 #include "qedi_version.h"
+#include "qedi_nvm_iscsi_cfg.h"
 
 #define QEDI_MODULE_NAME		"qedi"
 
 struct qedi_endpoint;
+
+#ifndef GET_FIELD2
+#define GET_FIELD2(value, name) \
+	(((value) & (name ## _MASK)) >> (name ## _OFFSET))
+#endif
 
 /*
  * PCI function probe defines
@@ -38,8 +41,8 @@ struct qedi_endpoint;
 #define QEDI_MAX_ISCSI_TASK		4096
 #define QEDI_MAX_TASK_NUM		0x0FFF
 #define QEDI_MAX_ISCSI_CONNS_PER_HBA	1024
-#define QEDI_ISCSI_MAX_BDS_PER_CMD	256	/* Firmware max BDs is 256 */
-#define MAX_OUSTANDING_TASKS_PER_CON	1024
+#define QEDI_ISCSI_MAX_BDS_PER_CMD	255	/* Firmware max BDs is 255 */
+#define MAX_OUTSTANDING_TASKS_PER_CON	1024
 
 #define QEDI_MAX_BD_LEN		0xffff
 #define QEDI_BD_SPLIT_SZ	0x1000
@@ -48,8 +51,8 @@ struct qedi_endpoint;
 /* MAX Length for cached SGL */
 #define MAX_SGLEN_FOR_CACHESGL	((1U << 16) - 1)
 
-#define MAX_NUM_MSIX_PF         8
-#define MIN_NUM_CPUS_MSIX(x)	min((x)->msix_count, num_online_cpus())
+#define MIN_NUM_CPUS_MSIX(x)	min_t(u32, x->dev_info.num_cqs, \
+					num_online_cpus())
 
 #define QEDI_LOCAL_PORT_MIN     60000
 #define QEDI_LOCAL_PORT_MAX     61024
@@ -57,13 +60,21 @@ struct qedi_endpoint;
 #define QEDI_LOCAL_PORT_INVALID	0xffff
 #define TX_RX_RING		16
 #define RX_RING			(TX_RX_RING - 1)
-#define LL2_SINGLE_BUF_SIZE	0x400
-#define QEDI_PAGE_SIZE		4096
 #define QEDI_PAGE_ALIGN(addr)	ALIGN(addr, QEDI_PAGE_SIZE)
 #define QEDI_PAGE_MASK		(~((QEDI_PAGE_SIZE) - 1))
 
-#define QEDI_PAGE_SIZE		4096
+#define QEDI_HW_DMA_BOUNDARY	0xfff
 #define QEDI_PATH_HANDLE	0xFE0000000UL
+
+enum qedi_nvm_tgts {
+	QEDI_NVM_TGT_PRI,
+	QEDI_NVM_TGT_SEC,
+};
+
+struct qedi_nvm_iscsi_image {
+	struct nvm_iscsi_cfg iscsi_cfg;
+	u32 crc;
+};
 
 struct qedi_uio_ctrl {
 	/* meta data */
@@ -129,7 +140,7 @@ struct skb_work_list {
 };
 
 /* Queue sizes in number of elements */
-#define QEDI_SQ_SIZE		MAX_OUSTANDING_TASKS_PER_CON
+#define QEDI_SQ_SIZE		MAX_OUTSTANDING_TASKS_PER_CON
 #define QEDI_CQ_SIZE		2048
 #define QEDI_CMDQ_SIZE		QEDI_MAX_ISCSI_TASK
 #define QEDI_PROTO_CQ_PROD_IDX	0
@@ -282,12 +293,13 @@ struct qedi_ctx {
 	void *bdq_pbl_list;
 	dma_addr_t bdq_pbl_list_dma;
 	u8 bdq_pbl_list_num_entries;
+	struct qedi_nvm_iscsi_image *iscsi_image;
+	dma_addr_t nvm_buf_dma;
 	void __iomem *bdq_primary_prod;
 	void __iomem *bdq_secondary_prod;
 	u16 bdq_prod_idx;
 	u16 rq_num_entries;
 
-	u32 msix_count;
 	u32 max_sqes;
 	u8 num_queues;
 	u32 max_active_conns;
@@ -336,6 +348,13 @@ struct qedi_ctx {
 	bool use_fast_sge;
 
 	atomic_t num_offloads;
+#define SYSFS_FLAG_FW_SEL_BOOT 2
+#define IPV6_LEN	41
+#define IPV4_LEN	17
+	struct iscsi_boot_kset *boot_kset;
+
+	/* Used for iscsi statistics */
+	struct mutex stats_lock;
 };
 
 struct qedi_work {

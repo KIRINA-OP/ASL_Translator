@@ -1,10 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /****************************************************************************
  * Driver for Solarflare network controllers and boards
  * Copyright 2006-2011 Solarflare Communications Inc.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation, incorporated herein by reference.
  */
 
 #ifndef EF4_MDIO_10G_H
@@ -83,7 +80,8 @@ void ef4_mdio_set_mmds_lpower(struct ef4_nic *efx, int low_power,
 			      unsigned int mmd_mask);
 
 /* Set (some of) the PHY settings over MDIO */
-int ef4_mdio_set_settings(struct ef4_nic *efx, struct ethtool_cmd *ecmd);
+int ef4_mdio_set_link_ksettings(struct ef4_nic *efx,
+				const struct ethtool_link_ksettings *cmd);
 
 /* Push advertising flags and restart autonegotiation */
 void ef4_mdio_an_reconfigure(struct ef4_nic *efx);

@@ -1,11 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright 2016 Linaro Ltd.
  * Copyright 2016 ZTE Corporation.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
  */
 
 #ifndef __ZX_DRM_DRV_H__
@@ -13,6 +9,8 @@
 
 extern struct platform_driver zx_crtc_driver;
 extern struct platform_driver zx_hdmi_driver;
+extern struct platform_driver zx_tvenc_driver;
+extern struct platform_driver zx_vga_driver;
 
 static inline u32 zx_readl(void __iomem *reg)
 {

@@ -1,15 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * MFD core driver for Ricoh RN5T618 PMIC
  *
  * Copyright (C) 2014 Beniamino Galvani <b.galvani@gmail.com>
  * Copyright (C) 2016 Toradex AG
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/delay.h>
@@ -154,6 +148,8 @@ static int rn5t618_i2c_remove(struct i2c_client *i2c)
 		rn5t618_pm_power_off = NULL;
 		pm_power_off = NULL;
 	}
+
+	unregister_restart_handler(&rn5t618_restart_handler);
 
 	return 0;
 }

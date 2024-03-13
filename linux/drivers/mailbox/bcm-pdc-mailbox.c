@@ -1,24 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2016 Broadcom
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License, version 2, as
- * published by the Free Software Foundation (the "GPL").
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License version 2 (GPLv2) for more details.
- *
- * You should have received a copy of the GNU General Public License
- * version 2 (GPLv2) along with this source code.
  */
 
 /*
  * Broadcom PDC Mailbox Driver
  * The PDC provides a ring based programming interface to one or more hardware
  * offload engines. For example, the PDC driver works with both SPU-M and SPU2
- * cryptographic offload hardware. In some chips the PDC is referred to as MDE.
+ * cryptographic offload hardware. In some chips the PDC is referred to as MDE,
+ * and in others the FA2/FA+ hardware is used with this PDC driver.
  *
  * The PDC driver registers with the Linux mailbox framework as a mailbox
  * controller, once for each PDC instance. Ring 0 for each PDC is registered as
@@ -108,6 +98,7 @@
 #define PDC_INTMASK_OFFSET   0x24
 #define PDC_INTSTATUS_OFFSET 0x20
 #define PDC_RCVLAZY0_OFFSET  (0x30 + 4 * PDC_RINGSET)
+#define FA_RCVLAZY0_OFFSET   0x100
 
 /*
  * For SPU2, configure MDE_CKSUM_CONTROL to write 17 bytes of metadata
@@ -162,6 +153,11 @@
 /* Maximum size buffer the DMA engine can handle */
 #define PDC_DMA_BUF_MAX 16384
 
+enum pdc_hw {
+	FA_HW,		/* FA2/FA+ hardware (i.e. Northstar Plus) */
+	PDC_HW		/* PDC/MDE hardware (i.e. Northstar 2, Pegasus) */
+};
+
 struct pdc_dma_map {
 	void *ctx;          /* opaque context associated with frame */
 };
@@ -211,13 +207,13 @@ struct pdc_regs {
 	u32  gptimer;                /* 0x028 */
 
 	u32  PAD;
-	u32  intrcvlazy_0;           /* 0x030 */
-	u32  intrcvlazy_1;           /* 0x034 */
-	u32  intrcvlazy_2;           /* 0x038 */
-	u32  intrcvlazy_3;           /* 0x03c */
+	u32  intrcvlazy_0;           /* 0x030 (Only in PDC, not FA2) */
+	u32  intrcvlazy_1;           /* 0x034 (Only in PDC, not FA2) */
+	u32  intrcvlazy_2;           /* 0x038 (Only in PDC, not FA2) */
+	u32  intrcvlazy_3;           /* 0x03c (Only in PDC, not FA2) */
 
 	u32  PAD[48];
-	u32  removed_intrecvlazy;    /* 0x100 */
+	u32  fa_intrecvlazy;         /* 0x100 (Only in FA2, not PDC) */
 	u32  flowctlthresh;          /* 0x104 */
 	u32  wrrthresh;              /* 0x108 */
 	u32  gmac_idle_cnt_thresh;   /* 0x10c */
@@ -243,7 +239,7 @@ struct pdc_regs {
 	u32  serdes_status1;         /* 0x1b0 */
 	u32  PAD[11];                /* 0x1b4-1dc */
 	u32  clk_ctl_st;             /* 0x1e0 */
-	u32  hw_war;                 /* 0x1e4 */
+	u32  hw_war;                 /* 0x1e4 (Only in PDC, not FA2) */
 	u32  pwrctl;                 /* 0x1e8 */
 	u32  PAD[5];
 
@@ -399,8 +395,6 @@ struct pdc_state {
 	 */
 	struct scatterlist *src_sg[PDC_RING_ENTRIES];
 
-	struct dentry *debugfs_stats;  /* debug FS stats file for this PDC */
-
 	/* counters */
 	u32  pdc_requests;     /* number of request messages submitted */
 	u32  pdc_replies;      /* number of reply messages received */
@@ -410,6 +404,9 @@ struct pdc_state {
 	u32  txnobuf;          /* unable to create tx descriptor */
 	u32  rxnobuf;          /* unable to create rx descriptor */
 	u32  rx_oflow;         /* count of rx overflows */
+
+	/* hardware type - FA2 or PDC/MDE */
+	enum pdc_hw hw_type;
 };
 
 /* Global variables */
@@ -502,9 +499,8 @@ static void pdc_setup_debugfs(struct pdc_state *pdcs)
 		debugfs_dir = debugfs_create_dir(KBUILD_MODNAME, NULL);
 
 	/* S_IRUSR == 0400 */
-	pdcs->debugfs_stats = debugfs_create_file(spu_stats_name, 0400,
-						  debugfs_dir, pdcs,
-						  &pdc_debugfs_stats);
+	debugfs_create_file(spu_stats_name, 0400, debugfs_dir, pdcs,
+			    &pdc_debugfs_stats);
 }
 
 static void pdc_free_debugfs(void)
@@ -1396,7 +1392,13 @@ static int pdc_interrupts_init(struct pdc_state *pdcs)
 
 	/* interrupt configuration */
 	iowrite32(PDC_INTMASK, pdcs->pdc_reg_vbase + PDC_INTMASK_OFFSET);
-	iowrite32(PDC_LAZY_INT, pdcs->pdc_reg_vbase + PDC_RCVLAZY0_OFFSET);
+
+	if (pdcs->hw_type == FA_HW)
+		iowrite32(PDC_LAZY_INT, pdcs->pdc_reg_vbase +
+			  FA_RCVLAZY0_OFFSET);
+	else
+		iowrite32(PDC_LAZY_INT, pdcs->pdc_reg_vbase +
+			  PDC_RCVLAZY0_OFFSET);
 
 	/* read irq from device tree */
 	pdcs->pdc_irq = irq_of_parse_and_map(dn, 0);
@@ -1455,7 +1457,7 @@ static int pdc_mb_init(struct pdc_state *pdcs)
 		mbc->chans[chan_index].con_priv = pdcs;
 
 	/* Register mailbox controller */
-	err = mbox_controller_register(mbc);
+	err = devm_mbox_controller_register(dev, mbc);
 	if (err) {
 		dev_crit(dev,
 			 "Failed to register PDC mailbox controller. Error %d.",
@@ -1464,6 +1466,17 @@ static int pdc_mb_init(struct pdc_state *pdcs)
 	}
 	return 0;
 }
+
+/* Device tree API */
+static const int pdc_hw = PDC_HW;
+static const int fa_hw = FA_HW;
+
+static const struct of_device_id pdc_mbox_of_match[] = {
+	{.compatible = "brcm,iproc-pdc-mbox", .data = &pdc_hw},
+	{.compatible = "brcm,iproc-fa2-mbox", .data = &fa_hw},
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, pdc_mbox_of_match);
 
 /**
  * pdc_dt_read() - Read application-specific data from device tree.
@@ -1481,6 +1494,8 @@ static int pdc_dt_read(struct platform_device *pdev, struct pdc_state *pdcs)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *dn = pdev->dev.of_node;
+	const struct of_device_id *match;
+	const int *hw_type;
 	int err;
 
 	err = of_property_read_u32(dn, "brcm,rx-status-len",
@@ -1491,6 +1506,14 @@ static int pdc_dt_read(struct platform_device *pdev, struct pdc_state *pdcs)
 			__func__);
 
 	pdcs->use_bcm_hdr = of_property_read_bool(dn, "brcm,use-bcm-hdr");
+
+	pdcs->hw_type = PDC_HW;
+
+	match = of_match_device(of_match_ptr(pdc_mbox_of_match), dev);
+	if (match != NULL) {
+		hw_type = match->data;
+		pdcs->hw_type = *hw_type;
+	}
 
 	return 0;
 }
@@ -1525,7 +1548,7 @@ static int pdc_probe(struct platform_device *pdev)
 	pdcs->pdc_idx = pdcg.num_spu;
 	pdcg.num_spu++;
 
-	err = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
+	err = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(39));
 	if (err) {
 		dev_warn(dev, "PDC device cannot perform DMA. Error %d.", err);
 		goto cleanup;
@@ -1577,7 +1600,6 @@ static int pdc_probe(struct platform_device *pdev)
 	if (err)
 		goto cleanup_buf_pool;
 
-	pdcs->debugfs_stats = NULL;
 	pdc_setup_debugfs(pdcs);
 
 	dev_dbg(dev, "pdc_probe() successful");
@@ -1604,18 +1626,10 @@ static int pdc_remove(struct platform_device *pdev)
 
 	pdc_hw_disable(pdcs);
 
-	mbox_controller_unregister(&pdcs->mbc);
-
 	dma_pool_destroy(pdcs->rx_buf_pool);
 	dma_pool_destroy(pdcs->ring_pool);
 	return 0;
 }
-
-static const struct of_device_id pdc_mbox_of_match[] = {
-	{.compatible = "brcm,iproc-pdc-mbox"},
-	{ /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, pdc_mbox_of_match);
 
 static struct platform_driver pdc_mbox_driver = {
 	.probe = pdc_probe,

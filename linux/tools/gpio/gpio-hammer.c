@@ -1,11 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * gpio-hammer - example swiss army knife to shake GPIO lines on a system
  *
  * Copyright (C) 2016 Linus Walleij
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
  *
  * Usage:
  *	gpio-hammer -n <device-name> -o <offset1> -o <offset2>
@@ -38,7 +35,7 @@ int hammer_device(const char *device_name, unsigned int *lines, int nlines,
 	memset(&data.values, 0, sizeof(data.values));
 	ret = gpiotools_request_linehandle(device_name, lines, nlines,
 					   GPIOHANDLE_REQUEST_OUTPUT, &data,
-					   "gpio-hammler");
+					   "gpio-hammer");
 	if (ret < 0)
 		goto exit_error;
 	else

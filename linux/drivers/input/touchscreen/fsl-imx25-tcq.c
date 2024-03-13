@@ -1,16 +1,11 @@
-/*
- * Copyright (C) 2014-2015 Pengutronix, Markus Pargmann <mpa@pengutronix.de>
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License version 2 as published by the
- * Free Software Foundation.
- *
- * Based on driver from 2011:
- *   Juergen Beisert, Pengutronix <kernel@pengutronix.de>
- *
- * This is the driver for the imx25 TCQ (Touchscreen Conversion Queue)
- * connected to the imx25 ADC.
- */
+// SPDX-License-Identifier: GPL-2.0
+//
+// Copyright (C) 2014-2015 Pengutronix, Markus Pargmann <mpa@pengutronix.de>
+// Based on driver from 2011:
+//   Juergen Beisert, Pengutronix <kernel@pengutronix.de>
+//
+// This is the driver for the imx25 TCQ (Touchscreen Conversion Queue)
+// connected to the imx25 ADC.
 
 #include <linux/clk.h>
 #include <linux/device.h>
@@ -507,7 +502,7 @@ static int mx25_tcq_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct input_dev *idev;
 	struct mx25_tcq_priv *priv;
-	struct mx25_tsadc *tsadc = dev_get_drvdata(pdev->dev.parent);
+	struct mx25_tsadc *tsadc = dev_get_drvdata(dev->parent);
 	struct resource *res;
 	void __iomem *mem;
 	int error;

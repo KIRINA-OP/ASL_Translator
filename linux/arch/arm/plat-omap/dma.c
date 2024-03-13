@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * linux/arch/arm/plat-omap/dma.c
  *
@@ -18,11 +19,6 @@
  * Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/
  * Converted DMA library into DMA platform driver.
  *	- G, Manjunath Kondaiah <manjugk@ti.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
  */
 
 #include <linux/module.h>
@@ -1316,16 +1312,14 @@ static int omap_system_dma_probe(struct platform_device *pdev)
 	enable_1510_mode	= d->dev_caps & ENABLE_1510_MODE;
 
 	dma_chan = devm_kcalloc(&pdev->dev, dma_lch_count,
-				sizeof(struct omap_dma_lch), GFP_KERNEL);
-	if (!dma_chan) {
-		dev_err(&pdev->dev, "%s: kzalloc fail\n", __func__);
+				sizeof(*dma_chan), GFP_KERNEL);
+	if (!dma_chan)
 		return -ENOMEM;
-	}
-
 
 	if (dma_omap2plus()) {
-		dma_linked_lch = kzalloc(sizeof(struct dma_link_info) *
-						dma_lch_count, GFP_KERNEL);
+		dma_linked_lch = kcalloc(dma_lch_count,
+					 sizeof(*dma_linked_lch),
+					 GFP_KERNEL);
 		if (!dma_linked_lch) {
 			ret = -ENOMEM;
 			goto exit_dma_lch_fail;
@@ -1451,7 +1445,6 @@ static void __exit omap_system_dma_exit(void)
 
 MODULE_DESCRIPTION("OMAP SYSTEM DMA DRIVER");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:" DRIVER_NAME);
 MODULE_AUTHOR("Texas Instruments Inc");
 
 /*

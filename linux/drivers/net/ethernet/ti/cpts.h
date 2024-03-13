@@ -1,21 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * TI Common Platform Time Sync
  *
  * Copyright (C) 2012 Richard Cochran <richardcochran@gmail.com>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 #ifndef _TI_CPTS_H_
 #define _TI_CPTS_H_
@@ -30,12 +18,13 @@
 #include <linux/of.h>
 #include <linux/ptp_clock_kernel.h>
 #include <linux/skbuff.h>
+#include <linux/ptp_classify.h>
 #include <linux/timecounter.h>
 
 struct cpsw_cpts {
 	u32 idver;                /* Identification and version */
 	u32 control;              /* Time sync control */
-	u32 res1;
+	u32 rftclk_sel;		  /* Reference Clock Select Register */
 	u32 ts_push;              /* Time stamp event push */
 	u32 ts_load_val;          /* Time stamp load value */
 	u32 ts_load_en;           /* Time stamp load enable */
@@ -118,13 +107,13 @@ struct cpts {
 	u32 cc_mult; /* for the nominal frequency */
 	struct cyclecounter cc;
 	struct timecounter tc;
-	struct delayed_work overflow_work;
 	int phc_index;
 	struct clk *refclk;
 	struct list_head events;
 	struct list_head pool;
 	struct cpts_event pool_data[CPTS_MAX_EVENTS];
 	unsigned long ov_check_period;
+	struct sk_buff_head txq;
 };
 
 void cpts_rx_timestamp(struct cpts *cpts, struct sk_buff *skb);
@@ -135,24 +124,14 @@ struct cpts *cpts_create(struct device *dev, void __iomem *regs,
 			 struct device_node *node);
 void cpts_release(struct cpts *cpts);
 
-static inline void cpts_rx_enable(struct cpts *cpts, int enable)
+static inline bool cpts_can_timestamp(struct cpts *cpts, struct sk_buff *skb)
 {
-	cpts->rx_enable = enable;
-}
+	unsigned int class = ptp_classify_raw(skb);
 
-static inline bool cpts_is_rx_enabled(struct cpts *cpts)
-{
-	return !!cpts->rx_enable;
-}
+	if (class == PTP_CLASS_NONE)
+		return false;
 
-static inline void cpts_tx_enable(struct cpts *cpts, int enable)
-{
-	cpts->tx_enable = enable;
-}
-
-static inline bool cpts_is_tx_enabled(struct cpts *cpts)
-{
-	return !!cpts->tx_enable;
+	return true;
 }
 
 #else
@@ -186,20 +165,7 @@ static inline void cpts_unregister(struct cpts *cpts)
 {
 }
 
-static inline void cpts_rx_enable(struct cpts *cpts, int enable)
-{
-}
-
-static inline bool cpts_is_rx_enabled(struct cpts *cpts)
-{
-	return false;
-}
-
-static inline void cpts_tx_enable(struct cpts *cpts, int enable)
-{
-}
-
-static inline bool cpts_is_tx_enabled(struct cpts *cpts)
+static inline bool cpts_can_timestamp(struct cpts *cpts, struct sk_buff *skb)
 {
 	return false;
 }

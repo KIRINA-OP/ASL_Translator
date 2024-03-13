@@ -1,13 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013 Texas Instruments Inc.
  *
  * David Griego, <dagriego@biglakesoftware.com>
  * Dale Farnsworth, <dale@farnsworth.org>
  * Archit Taneja, <archit@ti.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
  */
 
 #ifndef __TI_VPDMA_H_
@@ -242,16 +239,16 @@ void vpdma_add_sync_on_channel_ctd(struct vpdma_desc_list *list,
 void vpdma_add_abort_channel_ctd(struct vpdma_desc_list *list,
 		int chan_num);
 void vpdma_add_out_dtd(struct vpdma_desc_list *list, int width,
-		const struct v4l2_rect *c_rect,
+		int stride, const struct v4l2_rect *c_rect,
 		const struct vpdma_data_format *fmt, dma_addr_t dma_addr,
 		int max_w, int max_h, enum vpdma_channel chan, u32 flags);
 void vpdma_rawchan_add_out_dtd(struct vpdma_desc_list *list, int width,
-		const struct v4l2_rect *c_rect,
+		int stride, const struct v4l2_rect *c_rect,
 		const struct vpdma_data_format *fmt, dma_addr_t dma_addr,
 		int max_w, int max_h, int raw_vpdma_chan, u32 flags);
 
 void vpdma_add_in_dtd(struct vpdma_desc_list *list, int width,
-		const struct v4l2_rect *c_rect,
+		int stride, const struct v4l2_rect *c_rect,
 		const struct vpdma_data_format *fmt, dma_addr_t dma_addr,
 		enum vpdma_channel chan, int field, u32 flags, int frame_width,
 		int frame_height, int start_h, int start_v);

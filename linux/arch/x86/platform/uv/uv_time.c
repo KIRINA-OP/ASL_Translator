@@ -1,19 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * SGI RTC clock/timer routines.
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  *
  *  Copyright (c) 2009-2013 Silicon Graphics, Inc.  All Rights Reserved.
  *  Copyright (c) Dimitri Sivanich
@@ -158,7 +145,7 @@ static __init int uv_rtc_allocate_timers(void)
 {
 	int cpu;
 
-	blade_info = kzalloc(uv_possible_blades * sizeof(void *), GFP_KERNEL);
+	blade_info = kcalloc(uv_possible_blades, sizeof(void *), GFP_KERNEL);
 	if (!blade_info)
 		return -ENOMEM;
 
@@ -390,9 +377,11 @@ static __init int uv_rtc_setup_clock(void)
 
 	clock_event_device_uv.min_delta_ns = NSEC_PER_SEC /
 						sn_rtc_cycles_per_second;
+	clock_event_device_uv.min_delta_ticks = 1;
 
 	clock_event_device_uv.max_delta_ns = clocksource_uv.mask *
 				(NSEC_PER_SEC / sn_rtc_cycles_per_second);
+	clock_event_device_uv.max_delta_ticks = clocksource_uv.mask;
 
 	rc = schedule_on_each_cpu(uv_rtc_register_clockevents);
 	if (rc) {

@@ -1,15 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012 Avionic Design GmbH
  * Copyright (C) 2012 NVIDIA CORPORATION.  All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_panel.h>
+
 #include "drm.h"
+#include "dc.h"
+
+#include <media/cec-notifier.h>
 
 int tegra_output_connector_get_modes(struct drm_connector *connector)
 {
@@ -32,11 +33,11 @@ int tegra_output_connector_get_modes(struct drm_connector *connector)
 	else if (output->ddc)
 		edid = drm_get_edid(connector, output->ddc);
 
-	drm_mode_connector_update_edid_property(connector, edid);
+	cec_notifier_set_phys_addr_from_edid(output->cec, edid);
+	drm_connector_update_edid_property(connector, edid);
 
 	if (edid) {
 		err = drm_add_edid_modes(connector, edid);
-		drm_edid_to_eld(connector, edid);
 		kfree(edid);
 	}
 
@@ -67,6 +68,9 @@ tegra_output_connector_detect(struct drm_connector *connector, bool force)
 		else
 			status = connector_status_connected;
 	}
+
+	if (status != connector_status_connected)
+		cec_notifier_phys_addr_invalidate(output->cec);
 
 	return status;
 }
@@ -103,8 +107,8 @@ int tegra_output_probe(struct tegra_output *output)
 	panel = of_parse_phandle(output->of_node, "nvidia,panel", 0);
 	if (panel) {
 		output->panel = of_drm_find_panel(panel);
-		if (!output->panel)
-			return -EPROBE_DEFER;
+		if (IS_ERR(output->panel))
+			return PTR_ERR(output->panel);
 
 		of_node_put(panel);
 	}
@@ -167,11 +171,18 @@ int tegra_output_probe(struct tegra_output *output)
 		disable_irq(output->hpd_irq);
 	}
 
+	output->cec = cec_notifier_get(output->dev);
+	if (!output->cec)
+		return -ENOMEM;
+
 	return 0;
 }
 
 void tegra_output_remove(struct tegra_output *output)
 {
+	if (output->cec)
+		cec_notifier_put(output->cec);
+
 	if (gpio_is_valid(output->hpd_gpio)) {
 		free_irq(output->hpd_irq, output);
 		gpio_free(output->hpd_gpio);
@@ -212,4 +223,26 @@ void tegra_output_exit(struct tegra_output *output)
 
 	if (output->panel)
 		drm_panel_detach(output->panel);
+}
+
+void tegra_output_find_possible_crtcs(struct tegra_output *output,
+				      struct drm_device *drm)
+{
+	struct device *dev = output->dev;
+	struct drm_crtc *crtc;
+	unsigned int mask = 0;
+
+	drm_for_each_crtc(crtc, drm) {
+		struct tegra_dc *dc = to_tegra_dc(crtc);
+
+		if (tegra_dc_has_output(dc, dev))
+			mask |= drm_crtc_mask(crtc);
+	}
+
+	if (mask == 0) {
+		dev_warn(dev, "missing output definition for heads in DT\n");
+		mask = 0x3;
+	}
+
+	output->encoder.possible_crtcs = mask;
 }

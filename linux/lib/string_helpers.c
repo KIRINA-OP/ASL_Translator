@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Helpers for formatting and printing strings
  *
@@ -539,6 +540,25 @@ int string_escape_mem(const char *src, size_t isz, char *dst, size_t osz,
 }
 EXPORT_SYMBOL(string_escape_mem);
 
+int string_escape_mem_ascii(const char *src, size_t isz, char *dst,
+					size_t osz)
+{
+	char *p = dst;
+	char *end = p + osz;
+
+	while (isz--) {
+		unsigned char c = *src++;
+
+		if (!isprint(c) || !isascii(c) || c == '"' || c == '\\')
+			escape_hex(c, &p, end);
+		else
+			escape_passthrough(c, &p, end);
+	}
+
+	return p - dst;
+}
+EXPORT_SYMBOL(string_escape_mem_ascii);
+
 /*
  * Return an allocated string that has been escaped of special characters
  * and double quotes, making it safe to log in quotes.
@@ -576,7 +596,7 @@ char *kstrdup_quotable_cmdline(struct task_struct *task, gfp_t gfp)
 	char *buffer, *quoted;
 	int i, res;
 
-	buffer = kmalloc(PAGE_SIZE, GFP_TEMPORARY);
+	buffer = kmalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!buffer)
 		return NULL;
 
@@ -612,7 +632,7 @@ char *kstrdup_quotable_file(struct file *file, gfp_t gfp)
 		return kstrdup("<unknown>", gfp);
 
 	/* We add 11 spaces for ' (deleted)' to be appended */
-	temp = kmalloc(PATH_MAX + 11, GFP_TEMPORARY);
+	temp = kmalloc(PATH_MAX + 11, GFP_KERNEL);
 	if (!temp)
 		return kstrdup("<no_memory>", gfp);
 

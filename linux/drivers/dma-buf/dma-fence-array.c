@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * dma-fence-array: aggregate fences to be waited together
  *
@@ -6,15 +7,6 @@
  * Authors:
  *	Gustavo Padovan <gustavo@padovan.org>
  *	Christian König <christian.koenig@amd.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
  */
 
 #include <linux/export.h>
@@ -31,6 +23,14 @@ static const char *dma_fence_array_get_timeline_name(struct dma_fence *fence)
 	return "unbound";
 }
 
+static void irq_dma_fence_array_work(struct irq_work *wrk)
+{
+	struct dma_fence_array *array = container_of(wrk, typeof(*array), work);
+
+	dma_fence_signal(&array->base);
+	dma_fence_put(&array->base);
+}
+
 static void dma_fence_array_cb_func(struct dma_fence *f,
 				    struct dma_fence_cb *cb)
 {
@@ -39,8 +39,9 @@ static void dma_fence_array_cb_func(struct dma_fence *f,
 	struct dma_fence_array *array = array_cb->array;
 
 	if (atomic_dec_and_test(&array->num_pending))
-		dma_fence_signal(&array->base);
-	dma_fence_put(&array->base);
+		irq_work_queue(&array->work);
+	else
+		dma_fence_put(&array->base);
 }
 
 static bool dma_fence_array_enable_signaling(struct dma_fence *fence)
@@ -95,7 +96,6 @@ const struct dma_fence_ops dma_fence_array_ops = {
 	.get_timeline_name = dma_fence_array_get_timeline_name,
 	.enable_signaling = dma_fence_array_enable_signaling,
 	.signaled = dma_fence_array_signaled,
-	.wait = dma_fence_default_wait,
 	.release = dma_fence_array_release,
 };
 EXPORT_SYMBOL(dma_fence_array_ops);
@@ -136,6 +136,7 @@ struct dma_fence_array *dma_fence_array_create(int num_fences,
 	spin_lock_init(&array->lock);
 	dma_fence_init(&array->base, &dma_fence_array_ops, &array->lock,
 		       context, seqno);
+	init_irq_work(&array->work, irq_dma_fence_array_work);
 
 	array->num_fences = num_fences;
 	atomic_set(&array->num_pending, signal_on_any ? 1 : num_fences);
@@ -144,3 +145,29 @@ struct dma_fence_array *dma_fence_array_create(int num_fences,
 	return array;
 }
 EXPORT_SYMBOL(dma_fence_array_create);
+
+/**
+ * dma_fence_match_context - Check if all fences are from the given context
+ * @fence:		[in]	fence or fence array
+ * @context:		[in]	fence context to check all fences against
+ *
+ * Checks the provided fence or, for a fence array, all fences in the array
+ * against the given context. Returns false if any fence is from a different
+ * context.
+ */
+bool dma_fence_match_context(struct dma_fence *fence, u64 context)
+{
+	struct dma_fence_array *array = to_dma_fence_array(fence);
+	unsigned i;
+
+	if (!dma_fence_is_array(fence))
+		return fence->context == context;
+
+	for (i = 0; i < array->num_fences; i++) {
+		if (array->fences[i]->context != context)
+			return false;
+	}
+
+	return true;
+}
+EXPORT_SYMBOL(dma_fence_match_context);

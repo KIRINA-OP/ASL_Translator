@@ -26,14 +26,16 @@
 #define __I915_VMA_H__
 
 #include <linux/io-mapping.h>
+#include <linux/rbtree.h>
 
 #include <drm/drm_mm.h>
 
 #include "i915_gem_gtt.h"
 #include "i915_gem_fence_reg.h"
 #include "i915_gem_object.h"
-#include "i915_gem_request.h"
 
+#include "i915_active.h"
+#include "i915_request.h"
 
 enum i915_cache_level;
 
@@ -49,38 +51,66 @@ struct i915_vma {
 	struct drm_mm_node node;
 	struct drm_i915_gem_object *obj;
 	struct i915_address_space *vm;
+	const struct i915_vma_ops *ops;
 	struct drm_i915_fence_reg *fence;
+	struct reservation_object *resv; /** Alias of obj->resv */
 	struct sg_table *pages;
 	void __iomem *iomap;
+	void *private; /* owned by creator */
 	u64 size;
 	u64 display_alignment;
+	struct i915_page_sizes page_sizes;
 
-	unsigned int flags;
+	u32 fence_size;
+	u32 fence_alignment;
+
 	/**
-	 * How many users have pinned this object in GTT space. The following
-	 * users can each hold at most one reference: pwrite/pread, execbuffer
-	 * (objects are not allowed multiple times for the same batchbuffer),
-	 * and the framebuffer code. When switching/pageflipping, the
-	 * framebuffer code has at most two buffers pinned per crtc.
-	 *
-	 * In the worst case this is 1 + 1 + 1 + 2*2 = 7. That would fit into 3
-	 * bits with absolutely no headroom. So use 4 bits.
+	 * Count of the number of times this vma has been opened by different
+	 * handles (but same file) for execbuf, i.e. the number of aliases
+	 * that exist in the ctx->handle_vmas LUT for this vma.
 	 */
-#define I915_VMA_PIN_MASK 0xf
-#define I915_VMA_PIN_OVERFLOW	BIT(5)
+	unsigned int open_count;
+	unsigned long flags;
+	/**
+	 * How many users have pinned this object in GTT space.
+	 *
+	 * This is a tightly bound, fairly small number of users, so we
+	 * stuff inside the flags field so that we can both check for overflow
+	 * and detect a no-op i915_vma_pin() in a single check, while also
+	 * pinning the vma.
+	 *
+	 * The worst case display setup would have the same vma pinned for
+	 * use on each plane on each crtc, while also building the next atomic
+	 * state and holding a pin for the length of the cleanup queue. In the
+	 * future, the flip queue may be increased from 1.
+	 * Estimated worst case: 3 [qlen] * 4 [max crtcs] * 7 [max planes] = 84
+	 *
+	 * For GEM, the number of concurrent users for pwrite/pread is
+	 * unbounded. For execbuffer, it is currently one but will in future
+	 * be extended to allow multiple clients to pin vma concurrently.
+	 *
+	 * We also use suballocated pages, with each suballocation claiming
+	 * its own pin on the shared vma. At present, this is limited to
+	 * exclusive cachelines of a single page, so a maximum of 64 possible
+	 * users.
+	 */
+#define I915_VMA_PIN_MASK 0xff
+#define I915_VMA_PIN_OVERFLOW	BIT(8)
 
 	/** Flags and address space this VMA is bound to */
-#define I915_VMA_GLOBAL_BIND	BIT(6)
-#define I915_VMA_LOCAL_BIND	BIT(7)
+#define I915_VMA_GLOBAL_BIND	BIT(9)
+#define I915_VMA_LOCAL_BIND	BIT(10)
 #define I915_VMA_BIND_MASK (I915_VMA_GLOBAL_BIND | I915_VMA_LOCAL_BIND | I915_VMA_PIN_OVERFLOW)
 
-#define I915_VMA_GGTT		BIT(8)
-#define I915_VMA_CAN_FENCE	BIT(9)
-#define I915_VMA_CLOSED		BIT(10)
+#define I915_VMA_GGTT		BIT(11)
+#define I915_VMA_CAN_FENCE	BIT(12)
+#define I915_VMA_CLOSED		BIT(13)
+#define I915_VMA_USERFAULT_BIT	14
+#define I915_VMA_USERFAULT	BIT(I915_VMA_USERFAULT_BIT)
+#define I915_VMA_GGTT_WRITE	BIT(15)
 
-	unsigned int active;
-	struct i915_gem_active last_read[I915_NUM_ENGINES];
-	struct i915_gem_active last_fence;
+	struct i915_active active;
+	struct i915_active_request last_fence;
 
 	/**
 	 * Support different GGTT views into the same object.
@@ -96,29 +126,64 @@ struct i915_vma {
 
 	struct list_head obj_link; /* Link in the object's VMA list */
 	struct rb_node obj_node;
+	struct hlist_node obj_hash;
 
-	/** This vma's place in the batchbuffer or on the eviction list */
-	struct list_head exec_list;
+	/** This vma's place in the execbuf reservation list */
+	struct list_head exec_link;
+	struct list_head reloc_link;
+
+	/** This vma's place in the eviction list */
+	struct list_head evict_link;
+
+	struct list_head closed_link;
 
 	/**
 	 * Used for performing relocations during execbuffer insertion.
 	 */
+	unsigned int *exec_flags;
 	struct hlist_node exec_node;
-	unsigned long exec_handle;
-	struct drm_i915_gem_exec_object2 *exec_entry;
+	u32 exec_handle;
 };
 
 struct i915_vma *
-i915_vma_create(struct drm_i915_gem_object *obj,
-		struct i915_address_space *vm,
-		const struct i915_ggtt_view *view);
+i915_vma_instance(struct drm_i915_gem_object *obj,
+		  struct i915_address_space *vm,
+		  const struct i915_ggtt_view *view);
 
-void i915_vma_unpin_and_release(struct i915_vma **p_vma);
+void i915_vma_unpin_and_release(struct i915_vma **p_vma, unsigned int flags);
+#define I915_VMA_RELEASE_MAP BIT(0)
+
+static inline bool i915_vma_is_active(const struct i915_vma *vma)
+{
+	return !i915_active_is_idle(&vma->active);
+}
+
+int __must_check i915_vma_move_to_active(struct i915_vma *vma,
+					 struct i915_request *rq,
+					 unsigned int flags);
 
 static inline bool i915_vma_is_ggtt(const struct i915_vma *vma)
 {
 	return vma->flags & I915_VMA_GGTT;
 }
+
+static inline bool i915_vma_has_ggtt_write(const struct i915_vma *vma)
+{
+	return vma->flags & I915_VMA_GGTT_WRITE;
+}
+
+static inline void i915_vma_set_ggtt_write(struct i915_vma *vma)
+{
+	GEM_BUG_ON(!i915_vma_is_ggtt(vma));
+	vma->flags |= I915_VMA_GGTT_WRITE;
+}
+
+static inline void i915_vma_unset_ggtt_write(struct i915_vma *vma)
+{
+	vma->flags &= ~I915_VMA_GGTT_WRITE;
+}
+
+void i915_vma_flush_writes(struct i915_vma *vma);
 
 static inline bool i915_vma_is_map_and_fenceable(const struct i915_vma *vma)
 {
@@ -130,32 +195,20 @@ static inline bool i915_vma_is_closed(const struct i915_vma *vma)
 	return vma->flags & I915_VMA_CLOSED;
 }
 
-static inline unsigned int i915_vma_get_active(const struct i915_vma *vma)
+static inline bool i915_vma_set_userfault(struct i915_vma *vma)
 {
-	return vma->active;
+	GEM_BUG_ON(!i915_vma_is_map_and_fenceable(vma));
+	return __test_and_set_bit(I915_VMA_USERFAULT_BIT, &vma->flags);
 }
 
-static inline bool i915_vma_is_active(const struct i915_vma *vma)
+static inline void i915_vma_unset_userfault(struct i915_vma *vma)
 {
-	return i915_vma_get_active(vma);
+	return __clear_bit(I915_VMA_USERFAULT_BIT, &vma->flags);
 }
 
-static inline void i915_vma_set_active(struct i915_vma *vma,
-				       unsigned int engine)
+static inline bool i915_vma_has_userfault(const struct i915_vma *vma)
 {
-	vma->active |= BIT(engine);
-}
-
-static inline void i915_vma_clear_active(struct i915_vma *vma,
-					 unsigned int engine)
-{
-	vma->active &= ~BIT(engine);
-}
-
-static inline bool i915_vma_has_active_engine(const struct i915_vma *vma,
-					      unsigned int engine)
-{
-	return vma->active & BIT(engine);
+	return test_bit(I915_VMA_USERFAULT_BIT, &vma->flags);
 }
 
 static inline u32 i915_ggtt_offset(const struct i915_vma *vma)
@@ -165,6 +218,11 @@ static inline u32 i915_ggtt_offset(const struct i915_vma *vma)
 	GEM_BUG_ON(upper_32_bits(vma->node.start));
 	GEM_BUG_ON(upper_32_bits(vma->node.start + vma->node.size - 1));
 	return lower_32_bits(vma->node.start);
+}
+
+static inline u32 i915_ggtt_pin_bias(struct i915_vma *vma)
+{
+	return i915_vm_to_ggtt(vma->vm)->pin_bias;
 }
 
 static inline struct i915_vma *i915_vma_get(struct i915_vma *vma)
@@ -178,35 +236,63 @@ static inline void i915_vma_put(struct i915_vma *vma)
 	i915_gem_object_put(vma->obj);
 }
 
+static __always_inline ptrdiff_t ptrdiff(const void *a, const void *b)
+{
+	return a - b;
+}
+
 static inline long
 i915_vma_compare(struct i915_vma *vma,
 		 struct i915_address_space *vm,
 		 const struct i915_ggtt_view *view)
 {
+	ptrdiff_t cmp;
+
 	GEM_BUG_ON(view && !i915_is_ggtt(vm));
 
-	if (vma->vm != vm)
-		return vma->vm - vm;
+	cmp = ptrdiff(vma->vm, vm);
+	if (cmp)
+		return cmp;
 
+	BUILD_BUG_ON(I915_GGTT_VIEW_NORMAL != 0);
+	cmp = vma->ggtt_view.type;
 	if (!view)
-		return vma->ggtt_view.type;
+		return cmp;
 
-	if (vma->ggtt_view.type != view->type)
-		return vma->ggtt_view.type - view->type;
+	cmp -= view->type;
+	if (cmp)
+		return cmp;
 
-	return memcmp(&vma->ggtt_view.params,
-		      &view->params,
-		      sizeof(view->params));
+	assert_i915_gem_gtt_types();
+
+	/* ggtt_view.type also encodes its size so that we both distinguish
+	 * different views using it as a "type" and also use a compact (no
+	 * accessing of uninitialised padding bytes) memcmp without storing
+	 * an extra parameter or adding more code.
+	 *
+	 * To ensure that the memcmp is valid for all branches of the union,
+	 * even though the code looks like it is just comparing one branch,
+	 * we assert above that all branches have the same address, and that
+	 * each branch has a unique type/size.
+	 */
+	BUILD_BUG_ON(I915_GGTT_VIEW_NORMAL >= I915_GGTT_VIEW_PARTIAL);
+	BUILD_BUG_ON(I915_GGTT_VIEW_PARTIAL >= I915_GGTT_VIEW_ROTATED);
+	BUILD_BUG_ON(offsetof(typeof(*view), rotated) !=
+		     offsetof(typeof(*view), partial));
+	return memcmp(&vma->ggtt_view.partial, &view->partial, view->type);
 }
 
 int i915_vma_bind(struct i915_vma *vma, enum i915_cache_level cache_level,
 		  u32 flags);
 bool i915_gem_valid_gtt_space(struct i915_vma *vma, unsigned long cache_level);
-bool
-i915_vma_misplaced(struct i915_vma *vma, u64 size, u64 alignment, u64 flags);
+bool i915_vma_misplaced(const struct i915_vma *vma,
+			u64 size, u64 alignment, u64 flags);
 void __i915_vma_set_map_and_fenceable(struct i915_vma *vma);
+void i915_vma_revoke_mmap(struct i915_vma *vma);
 int __must_check i915_vma_unbind(struct i915_vma *vma);
+void i915_vma_unlink_ctx(struct i915_vma *vma);
 void i915_vma_close(struct i915_vma *vma);
+void i915_vma_reopen(struct i915_vma *vma);
 void i915_vma_destroy(struct i915_vma *vma);
 
 int __i915_vma_do_pin(struct i915_vma *vma,
@@ -221,8 +307,11 @@ i915_vma_pin(struct i915_vma *vma, u64 size, u64 alignment, u64 flags)
 	/* Pin early to prevent the shrinker/eviction logic from destroying
 	 * our vma as we insert and bind.
 	 */
-	if (likely(((++vma->flags ^ flags) & I915_VMA_BIND_MASK) == 0))
+	if (likely(((++vma->flags ^ flags) & I915_VMA_BIND_MASK) == 0)) {
+		GEM_BUG_ON(!drm_mm_node_allocated(&vma->node));
+		GEM_BUG_ON(i915_vma_misplaced(vma, size, alignment, flags));
 		return 0;
+	}
 
 	return __i915_vma_do_pin(vma, size, alignment, flags);
 }
@@ -245,14 +334,20 @@ static inline void __i915_vma_pin(struct i915_vma *vma)
 
 static inline void __i915_vma_unpin(struct i915_vma *vma)
 {
-	GEM_BUG_ON(!i915_vma_is_pinned(vma));
 	vma->flags--;
 }
 
 static inline void i915_vma_unpin(struct i915_vma *vma)
 {
+	GEM_BUG_ON(!i915_vma_is_pinned(vma));
 	GEM_BUG_ON(!drm_mm_node_allocated(&vma->node));
 	__i915_vma_unpin(vma);
+}
+
+static inline bool i915_vma_is_bound(const struct i915_vma *vma,
+				     unsigned int where)
+{
+	return vma->flags & where;
 }
 
 /**
@@ -280,12 +375,7 @@ void __iomem *i915_vma_pin_iomap(struct i915_vma *vma);
  * Callers must hold the struct_mutex. This function is only valid to be
  * called on a VMA previously iomapped by the caller with i915_vma_pin_iomap().
  */
-static inline void i915_vma_unpin_iomap(struct i915_vma *vma)
-{
-	lockdep_assert_held(&vma->vm->dev->struct_mutex);
-	GEM_BUG_ON(vma->iomap == NULL);
-	i915_vma_unpin(vma);
-}
+void i915_vma_unpin_iomap(struct i915_vma *vma);
 
 static inline struct page *i915_vma_first_page(struct i915_vma *vma)
 {
@@ -308,15 +398,13 @@ static inline struct page *i915_vma_first_page(struct i915_vma *vma)
  *
  * True if the vma has a fence, false otherwise.
  */
-static inline bool
-i915_vma_pin_fence(struct i915_vma *vma)
+int i915_vma_pin_fence(struct i915_vma *vma);
+int __must_check i915_vma_put_fence(struct i915_vma *vma);
+
+static inline void __i915_vma_unpin_fence(struct i915_vma *vma)
 {
-	lockdep_assert_held(&vma->vm->dev->struct_mutex);
-	if (vma->fence) {
-		vma->fence->pin_count++;
-		return true;
-	} else
-		return false;
+	GEM_BUG_ON(vma->fence->pin_count <= 0);
+	vma->fence->pin_count--;
 }
 
 /**
@@ -330,12 +418,29 @@ i915_vma_pin_fence(struct i915_vma *vma)
 static inline void
 i915_vma_unpin_fence(struct i915_vma *vma)
 {
-	lockdep_assert_held(&vma->vm->dev->struct_mutex);
-	if (vma->fence) {
-		GEM_BUG_ON(vma->fence->pin_count <= 0);
-		vma->fence->pin_count--;
-	}
+	/* lockdep_assert_held(&vma->vm->i915->drm.struct_mutex); */
+	if (vma->fence)
+		__i915_vma_unpin_fence(vma);
 }
 
-#endif
+void i915_vma_parked(struct drm_i915_private *i915);
 
+#define for_each_until(cond) if (cond) break; else
+
+/**
+ * for_each_ggtt_vma - Iterate over the GGTT VMA belonging to an object.
+ * @V: the #i915_vma iterator
+ * @OBJ: the #drm_i915_gem_object
+ *
+ * GGTT VMA are placed at the being of the object's vma_list, see
+ * vma_create(), so we can stop our walk as soon as we see a ppgtt VMA,
+ * or the list is empty ofc.
+ */
+#define for_each_ggtt_vma(V, OBJ) \
+	list_for_each_entry(V, &(OBJ)->vma.list, obj_link)		\
+		for_each_until(!i915_vma_is_ggtt(V))
+
+struct i915_vma *i915_vma_alloc(void);
+void i915_vma_free(struct i915_vma *vma);
+
+#endif
