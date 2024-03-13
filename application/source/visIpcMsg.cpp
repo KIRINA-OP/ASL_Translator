@@ -38,7 +38,7 @@ int visSocketApp:: deliver(uint8_t * content, int len){
 }
 
 
-int visSocketApp:: receive(uint8_t * buf, size_t len){
+int visSocketApp:: receive(char * buf, size_t len){
     int ret = read(app_sock, buf, len);
     if(ret < 0){
         perror("receive content error\n");
@@ -94,7 +94,7 @@ int visSocketAlgo:: deliver(uint8_t * content, int len){
 }
 
 
-int visSocketAlgo:: receive(uint8_t * buf, size_t len){
+int visSocketAlgo:: receive(char * buf, size_t len){
     int ret = read(app_sock, buf, len);
     if(ret < 0){
         perror("receive content error\n");

@@ -18,6 +18,7 @@
 #include <sys/un.h>
 #include <sys/ipc.h>
 #include <cstddef>
+#include "visControl.h"
 
 class visIpcMsg{
 
@@ -52,7 +53,7 @@ class visSocket: public visIpcMsg{
     public:
     virtual int init() = 0;
     virtual int deliver(uint8_t * content, int len) = 0;
-    virtual int receive(uint8_t * buf, size_t len) = 0;
+    virtual int receive(char * buf, size_t len) = 0;
 };
 
 const int MAXLINE = 100;
@@ -62,7 +63,7 @@ class visSocketApp: protected visSocket{
     visSocketApp(std::string app_path, std::string algo_path);
     int init();
     int deliver(uint8_t * content, int len);
-    int receive(uint8_t * buf, size_t len);
+    int receive(char * buf, size_t len);
     ~visSocketApp();
 };
 
@@ -74,7 +75,7 @@ class visSocketAlgo: protected visSocket{
     visSocketAlgo(std::string app_path, std::string algo_path);
     int init(); 
     int deliver(uint8_t * content, int len);
-    int receive(uint8_t * buf, size_t len);
+    int receive(char * buf, size_t len);
     ~visSocketAlgo();
 
 };

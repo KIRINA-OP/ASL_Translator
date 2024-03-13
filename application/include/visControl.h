@@ -134,7 +134,7 @@ struct visPaint{
 } ;
 
 //TODO: implement in screen control
-class visScreenControl: public visControl{
+class visScreenControl{
     #ifndef RAS_PI
     void oledReset();
     visGpioControl * gpio;
@@ -146,6 +146,8 @@ class visScreenControl: public visControl{
     #endif
     UBYTE* image;
     std::queue<std::string> buf;
+    std::mutex lock;
+
     public:
     #ifndef RAS_PI
     visScreenControl(visGpioControl* gpio, visI2CControl* i2c);
@@ -159,8 +161,6 @@ class visScreenControl: public visControl{
     void oledDisplay();
     void paintClear();
     bool insertText(std::string text);
-    bool acquireLock();
-    bool releaseLock();
     ~visScreenControl();
 };
 

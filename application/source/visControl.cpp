@@ -1,4 +1,5 @@
 #include "visControl.h"
+#include <mutex>
 
 #ifndef RAS_PI
 //first try: using libgpiod.h in C
@@ -292,7 +293,10 @@ void visScreenControl::paintClear(){
 
 bool visScreenControl::insertText(std::string text){
     //considering add an async func here to avoid conflict later, right now use mutex, but remember to aquire mutex outside of this function.
-    buf.push(text);
+    {
+        std::unique_lock<std::mutex> lock(this->lock);
+        buf.push(text);
+    }
     return true;
 }
 
@@ -305,8 +309,13 @@ visScreenControl::~visScreenControl(){
 void visScreenControl:: oledDisplay(){
     if(buf.empty())
         return;
-    std::string curr_Str = buf.front();
-    buf.pop();
+    std::string curr_Str;
+    {
+        std::unique_lock<std::mutex> lock(this->lock);
+        curr_Str = buf.front();
+        buf.pop();
+    }
+    paintClear();
     Paint_DrawString_EN(10, 0, curr_Str.c_str(), &Font12, WHITE, WHITE);
     OLED_1in51_Display(image);
     return;

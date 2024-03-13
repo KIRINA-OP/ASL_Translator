@@ -3,5 +3,6 @@
 
 void print_buf(uint8_t * buf, int len);
 void frameTransfer();
-void displayOutput();
+void receiveText(visSocketApp sock, visScreenControl* screen_obj);
+void displayOutput(visScreenControl* screen_obj);
 

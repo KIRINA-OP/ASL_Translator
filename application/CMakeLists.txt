@@ -32,6 +32,7 @@ add_executable(visapp  ${PROJECT_SOURCE_DIR}/main.cpp ${SRC_LIST} ${OLED_LIST})
 # target_compile_options(visapp PRIVATE -static)
 # target_compile_options(unit_test PRIVATE -static)
 target_link_libraries(visapp lgpio)
+target_link_libraries(visapp pthread)
 
 
 #in raspi doesn't need to include this

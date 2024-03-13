@@ -6,6 +6,10 @@
 #include "visController.h"
 #include "visIpcMsg.h"
 #include "visControl.h"
+#include <thread>
+#include <vector>
+#include <functional>
+
 
 //device mode enum
 enum visDeviceMode{
