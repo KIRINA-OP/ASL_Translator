@@ -1,7 +1,7 @@
 #include "visControl.h"
 
+#ifndef RAS_PI
 //first try: using libgpiod.h in C
-
 visGpioControl::visGpioControl(){
 }
 
@@ -122,15 +122,6 @@ visI2CControl::~visI2CControl(){
     close(fd);
 }
 
-
-
-
-
-
-
-
-
-
 visScreenControl::visScreenControl(visGpioControl * gpio, visI2CControl* i2c){
     this->gpio = gpio;
     this->i2c_obj = i2c;
@@ -235,6 +226,41 @@ void visScreenControl::paintNewImage(UWORD rotate, UWORD color)
     
     return;
 }
+
+void visScreenControl::oledDisplay(){
+    UWORD page, column, temp;
+
+    for (page=0; page<8; page++) {
+        /* set page address */
+        oledWriteReg(0xB0 + page);
+        /* set low column address */
+        oledWriteReg(0x00);
+        /* set high column address */
+        oledWriteReg(0x10);
+
+        /* write data */
+        for(column=0; column<128; column++) {
+            temp = image[(7-page) + column*8];
+            oledWriteData(temp);
+        }       
+    }
+}
+
+void visScreenControl:: paintClear(UWORD color){
+    for (UWORD Y = 0; Y < IMAGE_HEIGHT; Y++) {
+        for (UWORD X = 0; X < IMAGE_WIDTH; X++ ) {//8 pixel =  1 byte
+            UDOUBLE Addr = X + Y*IMAGE_WIDTH;
+            image[Addr] = color;
+        }
+    }
+}
+
+visScreenControl:: ~visScreenControl(){
+    delete image;
+    image = NULL;
+}
+
+#endif
 
 
 
@@ -354,38 +380,7 @@ void Paint_SetPixel(UWORD Xpoint, UWORD Ypoint, UWORD Color)
 
 
 
-void visScreenControl::oledDisplay(){
-    UWORD page, column, temp;
 
-    for (page=0; page<8; page++) {
-        /* set page address */
-        oledWriteReg(0xB0 + page);
-        /* set low column address */
-        oledWriteReg(0x00);
-        /* set high column address */
-        oledWriteReg(0x10);
-
-        /* write data */
-        for(column=0; column<128; column++) {
-            temp = image[(7-page) + column*8];
-            oledWriteData(temp);
-        }       
-    }
-}
-
-void visScreenControl:: paintClear(UWORD color){
-    for (UWORD Y = 0; Y < IMAGE_HEIGHT; Y++) {
-        for (UWORD X = 0; X < IMAGE_WIDTH; X++ ) {//8 pixel =  1 byte
-            UDOUBLE Addr = X + Y*IMAGE_WIDTH;
-            image[Addr] = color;
-        }
-    }
-}
-
-visScreenControl:: ~visScreenControl(){
-    delete image;
-    image = NULL;
-}
 
 
 

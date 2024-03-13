@@ -28,6 +28,9 @@
 #define UWORD   uint16_t
 #define UDOUBLE uint32_t
 
+#define RAS_PI 1
+
+#ifndef RAS_PI
 //define specific pins
 #define PB0 32 // (B-1) * 32 + 0 = 
 #define PE21 149
@@ -43,8 +46,15 @@ const UWORD WHITE = 0xFFFF;
 const uint8_t I2C_CMD = 0x00;
 const uint8_t I2C_RAM = 0x40;
 
+const std::string I2C_FILE = "/dev/i2c-0";
+const UBYTE IMAGE_SIZE = (UBYTE)2048;
+const UBYTE IMAGE_HEIGHT = 128;
+const UBYTE IMAGE_WIDTH = 64;
+#endif
 
 const unsigned int M_SECOND = 1000;
+const uint32_t SCREEN_ADDR = 0x3c;
+
 
 class visControl{
     protected:
@@ -52,13 +62,6 @@ class visControl{
     public:
 
 };
-
-const uint32_t SCREEN_ADDR = 0x3c;
-const std::string I2C_FILE = "/dev/i2c-0";
-const UBYTE IMAGE_SIZE = (UBYTE)2048;
-const UBYTE IMAGE_HEIGHT = 128;
-const UBYTE IMAGE_WIDTH = 64;
-
 
 //TODO: implement during camera control ticket
 class visCameraControl: public visControl{
