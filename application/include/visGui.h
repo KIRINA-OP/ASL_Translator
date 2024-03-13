@@ -1,6 +1,6 @@
 #ifndef VISGUI_H
 #define VISGUI_H
-#include "main.h"
+// #include "main.h"
 #include "visConfig.h"
 #include "visIpcMsg.h"
 #include "visTaskQueue.h"
@@ -8,7 +8,7 @@
 
 class visGui{
     //this class is responsible for communicating with GUI(QT) through message queue
-    LOCK * g_lock;
+    std::mutex g_lock;
     visDisplayConfig * display_config;
     visGuiMessageQueue * msg_queue;
     //task queue

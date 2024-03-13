@@ -1,12 +1,12 @@
 #ifndef VISCONTROLLER_H
 #define VISCONTROLLER_H
 
-class visDeviceControl;
+class visScreenControl;
 class visCameraControl;
 class visController{
     //listen to the request from the GUI process and handle it
     // visTaskQueue* requests;
-    visDeviceControl* device;
+    visScreenControl* device;
     visCameraControl* camera;
     //this is usually taken from the user input to the device
 

@@ -1,6 +1,14 @@
 #ifndef VISIPCMSG_H
 #define VISIPCMSG_H
-#include "main.h"
+// #include "main.h"
+#include <stdio.h>
+#include <iostream>
+#include <stdlib.h>
+#include <pthread.h>
+#include <string>
+#include <stdint.h>
+#include <cstring>
+#include <cstdio>
 #include <unistd.h>
 
 #include <netinet/in.h>

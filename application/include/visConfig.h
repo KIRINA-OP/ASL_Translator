@@ -1,11 +1,14 @@
 #ifndef VISCONFIG_H
 #define VISCONFIG_H
-#include "main.h"
+#include <mutex>
+#include <string>
+#include <stdexcept>
+
 
 //TODO: config implementation can be left later 
 class visConfig{
     protected:
-    LOCK* v_lock;
+    std::mutex v_lock;
     std::string xml_file_path;
     public:
     visConfig();
