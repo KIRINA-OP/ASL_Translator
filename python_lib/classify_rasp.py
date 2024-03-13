@@ -1,11 +1,11 @@
 import cv2
 import sys
-
+import time
 from video_classifier import VideoClassifier
 from video_classifier import VideoClassifierOptions
 
-_MODEL_PATH = 'model.tflite'
-_LABEL_PATH = 'label_map.txt'
+_MODEL_PATH = 'final_model_50.tflite'
+_LABEL_PATH = 'good_label_map.txt'
 _DIM = 172
 
 options = VideoClassifierOptions(
@@ -28,3 +28,5 @@ while cap.isOpened():
 
       # Feed the frame to the video classification model.
     result = classifier.classify(frame_rgb)
+    print(result)
+    time.sleep(0.1)
