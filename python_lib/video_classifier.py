@@ -50,7 +50,7 @@ class VideoClassifier(object):
       lines = f.readlines()
       label_list = [line.replace('\n', '') for line in lines]
       self._label_list = label_list
-
+    
     # Remove the batch dimension to get the real input shape.
     input_shape = signature.get_input_details()[
         self._MODEL_INPUT_SIGNATURE_NAME]['shape']
@@ -102,7 +102,6 @@ class VideoClassifier(object):
     """
     # Preprocess the input frame.
     frame = self._preprocess(frame)
-
     # Feed the input frame and the model internal states to the TFLite model.
     outputs = self._signature(**self._internal_states, image=frame)
 
@@ -125,7 +124,7 @@ class VideoClassifier(object):
     # Convert from logits to probabilities using softmax function.
     exp_logits = np.exp(np.squeeze(logits, axis=0))
     probabilities = exp_logits / np.sum(exp_logits)
-
+    
     # Sort the labels so that the more likely categories come first.
     prob_descending = sorted(
         range(len(probabilities)), key=lambda k: probabilities[k], reverse=True)
