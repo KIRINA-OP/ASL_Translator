@@ -262,121 +262,59 @@ visScreenControl:: ~visScreenControl(){
 
 #endif
 
-
-
-/*
-paint char
-uint32_t Char_Offset = (Acsii_Char - ' ') * Font->Height * (Font->Width / 8 + (Font->Width % 8 ? 1 : 0));
-    const unsigned char *ptr = &Font->table[Char_Offset];
-
-    for (Page = 0; Page < Font->Height; Page ++ ) {
-        for (Column = 0; Column < Font->Width; Column ++ ) {
-
-            //To determine whether the font background color and screen background color is consistent
-            if (FONT_BACKGROUND == Color_Background) { //this process is to speed up the scan
-                if (*ptr & (0x80 >> (Column % 8)))
-                    Paint_SetPixel(Xpoint + Column, Ypoint + Page, Color_Foreground);
-                    // Paint_DrawPoint(Xpoint + Column, Ypoint + Page, Color_Foreground, DOT_PIXEL_DFT, DOT_STYLE_DFT);
-            } else {
-                if (*ptr & (0x80 >> (Column % 8))) {
-                    Paint_SetPixel(Xpoint + Column, Ypoint + Page, Color_Foreground);
-                    // Paint_DrawPoint(Xpoint + Column, Ypoint + Page, Color_Foreground, DOT_PIXEL_DFT, DOT_STYLE_DFT);
-                } else {
-                    Paint_SetPixel(Xpoint + Column, Ypoint + Page, Color_Background);
-                    // Paint_DrawPoint(Xpoint + Column, Ypoint + Page, Color_Background, DOT_PIXEL_DFT, DOT_STYLE_DFT);
-                }
-            }
-            //One pixel is 8 bits
-            if (Column % 8 == 7)
-                ptr++;
-        }// Write a line
-        if (Font->Width % 8 != 0)
-            ptr++;
-    }// Write all
-*/
-
-
-/*
-void Paint_SetPixel(UWORD Xpoint, UWORD Ypoint, UWORD Color)
-{
-    if(Xpoint > Paint.Width || Ypoint > Paint.Height){
-        Debug("Exceeding display boundaries\r\n");
-        return;
-    }      
-    UWORD X, Y;
-
-    switch(Paint.Rotate) {
-    case 0:
-        X = Xpoint;
-        Y = Ypoint;  
-        break;
-    case 90:
-        X = Paint.WidthMemory - Ypoint - 1;
-        Y = Xpoint;
-        break;
-    case 180:
-        X = Paint.WidthMemory - Xpoint - 1;
-        Y = Paint.HeightMemory - Ypoint - 1;
-        break;
-    case 270:
-        X = Ypoint;
-        Y = Paint.HeightMemory - Xpoint - 1;
-        break;
-    default:
-        return;
-    }
-    
-    switch(Paint.Mirror) {
-    case MIRROR_NONE:
-        break;
-    case MIRROR_HORIZONTAL:
-        X = Paint.WidthMemory - X - 1;
-        break;
-    case MIRROR_VERTICAL:
-        Y = Paint.HeightMemory - Y - 1;
-        break;
-    case MIRROR_ORIGIN:
-        X = Paint.WidthMemory - X - 1;
-        Y = Paint.HeightMemory - Y - 1;
-        break;
-    default:
-        return;
-    }
-
-    if(X > Paint.WidthMemory || Y > Paint.HeightMemory){
-        Debug("Exceeding display boundaries\r\n");
-        return;
-    }
-    
-    if(Paint.Scale == 2){
-        UDOUBLE Addr = X / 8 + Y * Paint.WidthByte;
-        UBYTE Rdata = Paint.Image[Addr];
-        if(Color == BLACK)
-            Paint.Image[Addr] = Rdata & ~(0x80 >> (X % 8));
-        else
-            Paint.Image[Addr] = Rdata | (0x80 >> (X % 8));
-    }else if(Paint.Scale == 4){
-        UDOUBLE Addr = X / 4 + Y * Paint.WidthByte;
-        Color = Color % 4;//Guaranteed color scale is 4  --- 0~3
-        UBYTE Rdata = Paint.Image[Addr];
-        
-        Rdata = Rdata & (~(0xC0 >> ((X % 4)*2)));
-        Paint.Image[Addr] = Rdata | ((Color << 6) >> ((X % 4)*2));
-    }else if(Paint.Scale == 16) {
-        UDOUBLE Addr = X / 2 + Y * Paint.WidthByte;
-        UBYTE Rdata = Paint.Image[Addr];
-        Color = Color % 16;
-        Rdata = Rdata & (~(0xf0 >> ((X % 2)*4)));
-        Paint.Image[Addr] = Rdata | ((Color << 4) >> ((X % 2)*4));
-    }else if(Paint.Scale == 65) {
-        UDOUBLE Addr = X*2 + Y*Paint.WidthByte;
-        Paint.Image[Addr] = 0xff & (Color>>8);
-        Paint.Image[Addr+1] = 0xff & Color;
-    }
-
+visScreenControl::visScreenControl(){
+    UWORD Imagesize = ((OLED_1in51_WIDTH%8==0)? (OLED_1in51_WIDTH/8): (OLED_1in51_WIDTH/8+1)) * OLED_1in51_HEIGHT;
+    this->image = new UBYTE[((OLED_1in51_WIDTH%8==0)? (OLED_1in51_WIDTH/8): (OLED_1in51_WIDTH/8+1)) * OLED_1in51_HEIGHT];
 }
 
-*/
+
+bool visScreenControl::init(){
+    if(DEV_ModuleInit() != 0) {
+		return false;;
+	}
+	  
+	printf("OLED Init...\r\n");
+	OLED_1in51_Init();
+	DEV_Delay_ms(500);
+    OLED_1in51_Clear();	
+	// 0.Create a new image cache
+	printf("Paint_NewImage\r\n");
+	Paint_NewImage(image, OLED_1in51_WIDTH, OLED_1in51_HEIGHT, 270, BLACK);
+    Paint_DrawString_EN(10, 0, "hello world", &Font8, WHITE, WHITE);
+    return true;
+}
+
+
+void visScreenControl::paintClear(){
+    Paint_Clear(BLACK);
+}
+
+
+bool visScreenControl::insertText(std::string text){
+    //considering add an async func here to avoid conflict later, right now use mutex, but remember to aquire mutex outside of this function.
+    buf.push(text);
+    return true;
+}
+
+visScreenControl::~visScreenControl(){
+    delete image;
+    image = NULL;
+    OLED_1in51_Clear();
+}
+
+void visScreenControl:: oledDisplay(){
+    if(buf.empty())
+        return;
+    std::string curr_Str = buf.front();
+    buf.pop();
+    Paint_DrawString_EN(10, 0, curr_Str.c_str(), &Font12, WHITE, WHITE);
+    OLED_1in51_Display(image);
+    return;
+}
+
+
+
+
 
 
 

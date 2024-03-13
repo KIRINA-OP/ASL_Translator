@@ -20,6 +20,12 @@
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
+#include <queue>
+#include "lib/Config/DEV_Config.h"
+#include "lib/GUI/GUI_Paint.h"
+#include "lib/GUI/GUI_BMPfile.h"
+#include "lib/Config/Debug.h"
+#include "lib/OLED/OLED_1in51.h"
 
 
 // #include <sys/mman.h>
@@ -129,6 +135,7 @@ struct visPaint{
 
 //TODO: implement in screen control
 class visScreenControl: public visControl{
+    #ifndef RAS_PI
     void oledReset();
     visGpioControl * gpio;
     visI2CControl * i2c_obj;
@@ -136,17 +143,24 @@ class visScreenControl: public visControl{
     void oledWriteData(uint8_t val);
     UBYTE* image;
     UWORD rotate;
+    #endif
+    UBYTE* image;
+    std::queue<std::string> buf;
     public:
+    #ifndef RAS_PI
     visScreenControl(visGpioControl* gpio, visI2CControl* i2c);
-    bool init();
     void screenClear();
     void paintDrawString(std::string text, int line);
     void paintSelectImage();
-    void paintClear(UWORD color);
-    
     void paintNewImage(UWORD rotate, UWORD color);
+    #endif
+    visScreenControl();
+    bool init();
     void oledDisplay();
+    void paintClear();
+    bool insertText(std::string text);
     bool acquireLock();
+    bool releaseLock();
     ~visScreenControl();
 };
 
