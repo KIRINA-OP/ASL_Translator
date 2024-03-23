@@ -1,4 +1,5 @@
 #!/bin/bash
 
-python3 -m pip install pip --upgrade
-python3 -m pip install -r requirements.txt
+python3.8 -m venv fydp
+source fydp/bin/activate
+pip install -r requirements.txt
