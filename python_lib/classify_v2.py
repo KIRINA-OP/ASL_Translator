@@ -6,8 +6,8 @@ import sys
 
 import mediapipe as mp
 
-CLASSIFICATION_MODEL = 'model_no_transforms.tflite'
-LABEL_MAP = 'label_map_ASL.txt'
+CLASSIFICATION_MODEL = 'ASL_classifier.tflite'
+LABEL_MAP = 'label_map_ASL_big.txt'
 
 mphands = mp.solutions.hands
 hands = mphands.Hands()
@@ -56,12 +56,10 @@ while cap.isOpened():
                 if y < y_min:
                     y_min = y
 
-    cropped = image[y_min-10:y_max+10, x_min-10:x_max+10]
+    cropped = image[y_min-10:y_max+10, x_min-10:x_max+10, :]
 
-    frame_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-    frame = cv2.resize(frame_rgb, (224, 224))
+    frame = cv2.resize(cropped, (224, 224))
     frame = np.expand_dims(frame, 0)
-    frame = np.expand_dims(frame, 3)
 
     frame = np.float32(frame / 255)
 
